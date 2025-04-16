@@ -22,7 +22,7 @@ export default function Dashboard() {
     if (!file) return;
     const formData = new FormData();
     formData.append('file', file);
-    const res = await axios.post('/api/upload', formData);
+    await axios.post('/api/upload', formData);
     toast.success('업로드 완료!');
     setFile(null);
   };
@@ -31,7 +31,7 @@ export default function Dashboard() {
   const handleUrlUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
-    const res = await axios.post('/api/upload_url', null, { params: { url } });
+    await axios.post('/api/upload_url', null, { params: { url } });
     toast.success('URL 업로드 완료!');
     setUrl('');
   };

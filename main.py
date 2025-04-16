@@ -1,4 +1,5 @@
-from fastapi import FastAPI, UploadFile, File, Body, Query
+from fastapi import FastAPI, UploadFile, File, Body, Query, HTTPException
+from fastapi.responses import FileResponse
 from pathlib import Path
 import uuid
 from pydantic import BaseModel
@@ -22,15 +23,13 @@ app.add_middleware(
 # uploads 폴더를 /uploads 경로로 스태틱 서빙
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
+# React 빌드 파일 서빙 설정
+app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
+
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 TEMP_DIR = Path("temp")
 TEMP_DIR.mkdir(exist_ok=True)
-
-
-@app.get("/")
-def read_root():
-    return {"message": "Hello World"}
 
 
 @app.post("/api/upload")
@@ -44,10 +43,10 @@ def upload_file(
     with open(file_path, "wb") as buffer:
         content = file.file.read()
         buffer.write(content)
-        
+
     # 비디오 텍스트 추출
     text = video_to_text(file_path)
-    
+
     # 임베딩 생성
     ids = add_to_chroma(text, {"file_name": file_name, "infomation": text})
     print(ids)
@@ -56,9 +55,7 @@ def upload_file(
 
 
 @app.post("/api/upload_url")
-def upload_video_url(
-    url: str = Query(..., description="비디오 파일의 URL")
-):
+def upload_video_url(url: str = Query(..., description="비디오 파일의 URL")):
     file_name = f"{uuid.uuid4()}_downloaded.mp4"
     file_path = UPLOAD_DIR / file_name
 
@@ -92,6 +89,21 @@ def search_file(text: str):
         )
 
     return processed_results
+
+
+# React 앱의 모든 경로를 처리하기 위한 라우트
+@app.get("/{full_path:path}")
+async def serve_react_app(full_path: str):
+    # API 경로는 이 핸들러에서 처리하지 않음
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    # index.html 파일 반환
+    index_file = Path("frontend/dist/index.html")
+    if index_file.exists():
+        return FileResponse(index_file)
+    else:
+        raise HTTPException(status_code=404, detail="React build files not found")
 
 
 if __name__ == "__main__":
