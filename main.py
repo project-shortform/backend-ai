@@ -13,19 +13,19 @@ TEMP_DIR = Path("temp")
 TEMP_DIR.mkdir(exist_ok=True)
 
 
-
 @app.get("/")
 def read_root():
     return {"message": "Hello World"}
+
 
 @app.post("/upload")
 def upload_file(
     file: UploadFile = File(...),
 ):
     infomation = file.filename
-    
+
     file_name = f"{uuid.uuid4()}_{file.filename}"
-    
+
     # 파일 저장
     file_path = UPLOAD_DIR / file_name
     with open(file_path, "wb") as buffer:
@@ -38,22 +38,25 @@ def upload_file(
 
     return ids
 
+
 @app.get("/search")
-def search_file(
-    text: str
-):
+def search_file(text: str):
     results = search_chroma(text)
-    
+
     # 결과 가공
     processed_results = []
-    
+
     for i in range(len(results["documents"][0])):
-        processed_results.append({
-            "file_name": results["metadatas"][0][i]["file_name"],
-            "metadata": results["metadatas"][0][i]
-        })
-    
+        processed_results.append(
+            {
+                "file_name": results["metadatas"][0][i]["file_name"],
+                "metadata": results["metadatas"][0][i],
+                "distance": results["distances"][0][i],
+            }
+        )
+
     return processed_results
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5000)
