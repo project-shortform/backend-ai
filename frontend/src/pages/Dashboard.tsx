@@ -16,24 +16,30 @@ export default function Dashboard() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [uploadTab, setUploadTab] = useState('file');
 
+  const [isUploading, setIsUploading] = useState(false);
+
   // 파일 업로드
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
+    setIsUploading(true);
     const formData = new FormData();
     formData.append('file', file);
     await axios.post('/api/upload', formData);
     toast.success('업로드 완료!');
     setFile(null);
+    setIsUploading(false);
   };
 
   // URL 업로드
   const handleUrlUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
+    setIsUploading(true);
     await axios.post('/api/upload_url', null, { params: { url } });
     toast.success('URL 업로드 완료!');
     setUrl('');
+    setIsUploading(false);
   };
 
   // 검색
@@ -68,7 +74,9 @@ export default function Dashboard() {
                   accept='video/*'
                   onChange={(e) => setFile(e.target.files?.[0] || null)}
                 />
-                <Button type='submit'>업로드</Button>
+                <Button type='submit' disabled={isUploading}>
+                  {isUploading ? '업로드 중...' : '업로드'}
+                </Button>
               </form>
             </TabsContent>
             <TabsContent value='url'>
@@ -79,7 +87,9 @@ export default function Dashboard() {
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                 />
-                <Button type='submit'>URL 업로드</Button>
+                <Button type='submit' disabled={isUploading}>
+                  {isUploading ? '업로드 중...' : 'URL 업로드'}
+                </Button>
               </form>
             </TabsContent>
           </Tabs>
