@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { toast } from 'sonner';
 
 axios.defaults.baseURL = 'http://localhost:5000';
 
@@ -22,7 +23,7 @@ export default function Dashboard() {
     const formData = new FormData();
     formData.append('file', file);
     const res = await axios.post('/api/upload', formData);
-    alert('업로드 완료!');
+    toast.success('업로드 완료!');
     setFile(null);
   };
 
@@ -31,7 +32,7 @@ export default function Dashboard() {
     e.preventDefault();
     if (!url) return;
     const res = await axios.post('/api/upload_url', null, { params: { url } });
-    alert('URL 업로드 완료!');
+    toast.success('URL 업로드 완료!');
     setUrl('');
   };
 
@@ -41,6 +42,7 @@ export default function Dashboard() {
     if (!search) return;
     const res = await axios.get('/api/search', { params: { text: search } });
     setSearchResults(res.data);
+    toast.success('검색 완료!');
   };
 
   return (
