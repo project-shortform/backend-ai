@@ -3,9 +3,8 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
 
-axios.defaults.baseURL = 'http://localhost:5000';
+axios.defaults.baseURL = 'http://49.143.34.88:5000/';
 
 export default function VideoDetail() {
   const { fileName } = useParams<{ fileName: string }>();
@@ -35,7 +34,7 @@ export default function VideoDetail() {
         </CardHeader>
         <CardContent>
           <video
-            src={`http://localhost:5000/uploads/${fileName}`}
+            src={`http://49.143.34.88:5000/uploads/${fileName}`}
             controls
             className='w-full mb-4 rounded'
           />
