@@ -1,11 +1,8 @@
 import base64
 import cv2
-from openai import OpenAI
 import requests
 import shutil
-
-client = OpenAI()
-
+from llm import client
 
 # Function to encode the image
 def encode_image(image_path):
