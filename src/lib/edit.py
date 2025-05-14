@@ -4,7 +4,6 @@ from moviepy import (
     CompositeVideoClip,
     concatenate_videoclips,
 )
-import random
 
 def edit_video_clips(
     video_infos: list[dict],
