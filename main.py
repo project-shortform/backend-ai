@@ -4,7 +4,7 @@ from pathlib import Path
 import uvicorn
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from src.routers import video, story, edit
+from src.routers import video, story, edit, tts_service
 
 app = FastAPI()
 
@@ -21,6 +21,7 @@ app.add_middleware(
 app.include_router(video.router)
 app.include_router(story.router)
 app.include_router(edit.router)
+app.include_router(tts_service.router)
 
 
 # uploads 폴더를 /uploads 경로로 스태틱 서빙
