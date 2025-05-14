@@ -1,8 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, Query
 from pathlib import Path
 import uuid
-from lib.embedding import add_to_chroma, search_chroma
-from lib.video import video_to_text, download_video_from_url
+from src.lib.embedding import add_to_chroma, search_chroma
+from src.lib.video import video_to_text, download_video_from_url
 
 router = APIRouter(prefix="/api/video")
 

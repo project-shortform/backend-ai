@@ -4,7 +4,7 @@ from pathlib import Path
 import uvicorn
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from routers import video, story, edit
+from src.routers import video, story, edit
 
 app = FastAPI()
 

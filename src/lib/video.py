@@ -2,7 +2,7 @@ import base64
 import cv2
 import requests
 import shutil
-from llm import client
+from src.lib.llm import client
 
 # Function to encode the image
 def encode_image(image_path):
