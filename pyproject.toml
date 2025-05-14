@@ -7,7 +7,7 @@ requires-python = ">=3.9"
 dependencies = [
     "chromadb>=0.6.3",
     "fastapi>=0.115.12",
-    "litellm>=1.65.4.post1",
+    "moviepy>=2.1.2",
     "openai>=1.71.0",
     "opencv-python>=4.11.0.86",
     "python-dotenv>=1.1.0",
