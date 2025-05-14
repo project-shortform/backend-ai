@@ -7,7 +7,7 @@ router = APIRouter(prefix="/api/story")
 @router.post("/generate")
 def generate_story(text: str):
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         messages=[
             {"role": "developer", "content": """
              You are a storyteller.
