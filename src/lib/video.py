@@ -4,7 +4,6 @@ import requests
 import shutil
 from src.lib.llm import client
 
-
 # Function to encode the image
 def encode_image(image_path):
     """이미지 파일을 base64로 인코딩합니다.
@@ -146,6 +145,9 @@ def download_video_from_url(url: str, save_path: str) -> str:
         with open(save_path, "wb") as f:
             shutil.copyfileobj(r.raw, f)
     return save_path
+
+
+
 
 
 
