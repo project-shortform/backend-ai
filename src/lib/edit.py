@@ -5,6 +5,7 @@ from moviepy import (
     concatenate_videoclips,
     AudioFileClip
 )
+from moviepy.video import fx
 import os
 
 def create_composite_video(video_infos: list[dict], output_path: str) -> str:
@@ -43,6 +44,7 @@ def create_composite_video(video_infos: list[dict], output_path: str) -> str:
     os.makedirs(temp_dir, exist_ok=True)
     
     final_clips = []
+    base_resolution = (1920, 1080)  # 기준 해상도 (width, height)
     
     try:
         for i, info in enumerate(video_infos):
@@ -64,7 +66,11 @@ def create_composite_video(video_infos: list[dict], output_path: str) -> str:
             except Exception as e:
                 print(f"비디오 로드 중 오류: {video_path} - {e}")
                 continue
-                
+            
+            # 기준 해상도 설정 (첫 번째 유효한 비디오)
+            if base_resolution is None:
+                base_resolution = video_clip.size  # (width, height)
+            
             # 오디오 로드 또는 기본 오디오 사용
             if audio_path:
                 try:
@@ -103,6 +109,10 @@ def create_composite_video(video_infos: list[dict], output_path: str) -> str:
             if audio_clip is not None:
                 adjusted_clip = adjusted_clip.with_audio(audio_clip)
             
+            # 해상도 맞추기 (기준 해상도에 맞게 리사이즈)
+            if base_resolution is not None and adjusted_clip.size != base_resolution:
+                adjusted_clip = adjusted_clip.with_effects([fx.Resize(base_resolution)])
+            
             # 자막 추가
             if text:
                 txt_clip = (
@@ -112,7 +122,7 @@ def create_composite_video(video_infos: list[dict], output_path: str) -> str:
                         text=text,
                         color="white",
                         method='caption',
-                        size=adjusted_clip.size  # 비디오 크기에 맞게 자막 크기 설정
+                        size=base_resolution  # 기준 해상도에 맞게 자막 크기 설정
                     )
                     .with_position(("center", "bottom"))
                     .with_duration(adjusted_clip.duration)  # duration 설정 복원
@@ -167,12 +177,12 @@ if __name__ == "__main__":
     video_infos = [
         {
             "path": "uploads/97c86863-c23a-4ffb-a19d-8164a4c5a3a2_downloaded.mp4", 
-            "audio_duration": 30.0,  # 오디오 파일 없이 길이만 지정
+            "audio_path": "audios/97c86863-c23a-4ffb-a19d-8164a4c5a3a2.mp3",  # 오디오 파일 없이 길이만 지정
             "text": "첫 번째 비디오 설명"
         },
         {
             "path": "uploads/2096b708-c8a0-4e24-bf53-a73a821f125d_downloaded.mp4", 
-            "audio_duration": 8.0,  # 오디오 파일 없이 길이만 지정
+            "audio_path": "audios/2096b708-c8a0-4e24-bf53-a73a821f125d.mp3",  # 오디오 파일 없이 길이만 지정
             "text": "두 번째 비디오 설명"
         }
     ]
