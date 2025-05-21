@@ -1,8 +1,31 @@
 from fastapi import APIRouter
 from src.lib.llm import client
 from pydantic import BaseModel
+from fastapi import Body
 
 router = APIRouter(prefix="/api/story")
+
+# 입력 프롬프트 - Request body
+
+class Style(BaseModel):
+    category: str
+    concept: str
+    quantity: str
+
+class Viewers(BaseModel):
+    sex: str
+    age: str
+    viewers_style: str
+
+class Info(BaseModel):
+    request_info: str
+
+class StoryInput(BaseModel):
+    style: Style
+    viewers: Viewers
+    info: Info
+
+# 출력 프롬프트 - Response body
 
 class Scene(BaseModel):
     scene: int
@@ -14,7 +37,23 @@ class Story(BaseModel):
 
 
 @router.post("/generate")
-def generate_story(text: str):
+def generate_story(input: StoryInput = Body(...)):
+    # JSON 입력을 텍스트 포맷으로 변환
+    text = f"""
+**[영상 스타일 정보]**
+- 카테고리: {input.style.category}
+- 스토리 컨셉: {input.style.concept}
+- 분량: {input.style.quantity}
+
+**[영상 시청자 정보]**
+- 성별: {input.viewers.sex}
+- 연령대: {input.viewers.age}
+- 시청자 스타일: {input.viewers.viewers_style}
+
+**[상세 정보]**
+- 영상에 대한 추가 요구사항: {input.info.request_info}
+"""
+
     response = client.responses.parse(
         model="gpt-4o",
         input=[
@@ -89,6 +128,4 @@ def generate_story(text: str):
         text_format=Story,
     )
 
-    story = response.output_parsed
-
-    return story
+    return response.output_parsed
