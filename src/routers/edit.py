@@ -4,6 +4,8 @@ from typing import List
 from src.lib.embedding import search_chroma
 from src.lib.tts import generate_tts_audio
 from src.lib.edit import create_composite_video
+import os
+import re
 
 router = APIRouter(prefix="/api/edit")
 
@@ -14,6 +16,26 @@ class Scene(BaseModel):
 
 class StoryRequest(BaseModel):
     story: List[Scene]
+
+def get_next_output_path():
+    output_dir = "output"
+    base_name = "final_edit"
+    ext = ".mp4"
+    pattern = re.compile(rf"{base_name}_(\d+){re.escape(ext)}")
+    max_idx = 0
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    for fname in os.listdir(output_dir):
+        match = pattern.match(fname)
+        if match:
+            idx = int(match.group(1))
+            if idx > max_idx:
+                max_idx = idx
+
+    next_idx = max_idx + 1
+    return os.path.join(output_dir, f"{base_name}_{next_idx}{ext}")
 
 @router.post("/")
 def edit_video(story_req: StoryRequest):
@@ -50,7 +72,7 @@ def edit_video(story_req: StoryRequest):
         })
 
     # 3. 영상과 오디오, 자막 합치기 (lib 함수 사용)
-    output_path = "output/final_edit.mp4"
+    output_path = get_next_output_path()
     try:
         create_composite_video(video_infos, output_path)
     except Exception as e:
