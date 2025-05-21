@@ -35,7 +35,7 @@ def get_next_output_path():
                 max_idx = idx
 
     next_idx = max_idx + 1
-    return os.path.join(output_dir, f"{base_name}_{next_idx}{ext}")
+    return output_dir + "/" + f"{base_name}_{next_idx}{ext}"
 
 @router.post("/")
 def edit_video(story_req: StoryRequest):
