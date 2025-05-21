@@ -26,6 +26,7 @@ app.include_router(tts_service.router)
 
 # uploads 폴더를 /uploads 경로로 스태틱 서빙
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/output", StaticFiles(directory="output"), name="output")
 
 # React 빌드 파일 서빙 설정
 # app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
