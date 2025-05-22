@@ -6,7 +6,7 @@ router = APIRouter(prefix="/api/tts")
 
 class TTSRequest(BaseModel):
     text: str
-    voice: str = "alloy"
+    voice: str = "onyx"
 
 @router.post("/generate")
 def tts_endpoint(request: TTSRequest):
