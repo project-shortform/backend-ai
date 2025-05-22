@@ -55,7 +55,7 @@ def generate_story(input: StoryInput = Body(...)):
 """
 
     response = client.responses.parse(
-        model="gpt-4o",
+        model="gpt-4.1",
         input=[
             {"role": "system", "content": """
              ### System Instructions (Custom GPT용)
@@ -92,7 +92,7 @@ def generate_story(input: StoryInput = Body(...)):
             [
             {
                 "scene" : 1
-                "script": "햇살이 부드럽게 비치는 창가 자리. 나무 테이블 위에 놓인 라떼와 꽃 한 송이. 배경에는 잔잔한 피아노 음악. 젊은 여성이 핸드폰으로 커피를 촬영하고 있다.",
+                "script": "A window seat with soft sunlight. Latte and a flower on a wooden table. Calm piano music in the background. A young woman is filming coffee on her phone.",
                 "subtitle": "나만의 시간을 더 특별하게 만드는 공간,"
             },
             {
@@ -106,6 +106,17 @@ def generate_story(input: StoryInput = Body(...)):
             - 시청자의 몰입을 유도하기 위한 감정 흐름과 템포 조절이 중요합니다.
             - scene 타이틀을 입력하지 마세요. 최대한 장면 설명에 입력되게 작성해주세요.
             - 음성 및 자막에서 나레이션과 대사를 구분하지 않습니다. 또한, 쌍따옴표(")를 입력하지 말고 텍스트로만 출력하세요.
+            - script 는 '영어'로 작성하세요.
+            - subtitle 은 '한국어'로 작성하세요.
+            - script는 영상 임베딩에 사용할 내용이므로 영상 임베딩에 최대의 효율을 낼 수 있도록 작성해줘.
+            
+            <영상 분량(quantity) 조절 관련 참고 사항> 
+            - 사용자가 입력한 분량 (예: 15초, 30초, 1분, 3분, 5분) 에 맞게 씬 개수를 적절히 선택하세요.
+            - 15초 → 한 씬 당 자막 길이 TTS로 읽었을 때 4초 → 씬 개수 4개
+            - 30초 → 한 씬 당 자막 길이 TTS로 읽었을 때 4초 → 씬 개수 8개
+            - 1분 → 한 씬 당 자막 길이 TTS로 읽었을 때 5초 → 씬 개수 12개
+            - 3분 → 한 씬 당 자막 길이 TTS로 읽었을 때 5초 → 씬 개수 36개
+            - 5분 → 한 씬 당 자막 길이 TTS로 읽었을 때 5초 → 씬 개수 60개
 
             Important!
             - 출력 형식을 반드시 **JSON 코드** 형식으로 반환해주세요.
@@ -119,6 +130,8 @@ def generate_story(input: StoryInput = Body(...)):
             - 장면 구성은 **명확한 흐름, 감정 곡선**, 그리고 **시청자 몰입도**를 고려해 설계되어야 합니다. 
             - **단순 설명이 아닌, 시각적으로 그려지는 구성**을 목표로 하십시오.
             - 출력 형식을 **JSON 코드**로 반환하십시오.
+            - 절대 씬의 내용(script, subtitle)을 비우지 마세요.
+            
              """},
             {
                 "role": "user", 
