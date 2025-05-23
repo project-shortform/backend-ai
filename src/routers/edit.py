@@ -4,10 +4,11 @@ from typing import List
 from src.lib.embedding import search_chroma
 from src.lib.tts import generate_tts_audio
 from src.lib.edit import create_composite_video
+from src.db import save_video_generation_info
 import os
 import re
 
-router = APIRouter(prefix="/api/edit")
+router = APIRouter(prefix="/api/ai")
 
 class Scene(BaseModel):
     scene: int
@@ -37,7 +38,7 @@ def get_next_output_path():
     next_idx = max_idx + 1
     return output_dir + "/" + f"{base_name}_{next_idx}{ext}"
 
-@router.post("/")
+@router.post("/video_generate")
 def edit_video(story_req: StoryRequest):
     story_req = story_req.model_dump()
     
@@ -68,14 +69,20 @@ def edit_video(story_req: StoryRequest):
         video_infos.append({
             "path": f"uploads/{file_name}",
             "audio_path": audio_path,
-            "text": scene["subtitle"]
+            "text": scene["subtitle"],
+            "scene": scene["scene"],
+            "script": scene["script"]
         })
 
     # 3. 영상과 오디오, 자막 합치기 (lib 함수 사용)
     output_path = get_next_output_path()
     try:
         create_composite_video(video_infos, output_path)
+        
+        # 4. DB에 생성 정보 저장
+        record_id = save_video_generation_info(output_path, video_infos)
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"비디오 합성 중 오류: {e}")
 
-    return {"result": "success", "output_video": output_path}
+    return {"result": "success", "output_video": output_path, "record_id": record_id}

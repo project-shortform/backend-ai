@@ -118,7 +118,7 @@ def create_composite_video(video_infos: list[dict], output_path: str) -> str:
                 txt_clip = (
                     TextClip(
                         font="fonts/NotoSansKR-Medium.ttf",
-                        font_size=24,
+                        font_size=36,
                         text=text,
                         color="white",
                         method='caption',
