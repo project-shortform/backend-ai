@@ -29,7 +29,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.mount("/output", StaticFiles(directory="output"), name="output")
 
 # React 빌드 파일 서빙 설정
-# app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
+app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
 
 # React 앱의 모든 경로를 처리하기 위한 라우트
 @app.get("/{full_path:path}")

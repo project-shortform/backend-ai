@@ -25,7 +25,7 @@ export default function Dashboard() {
     setIsUploading(true);
     const formData = new FormData();
     formData.append('file', file);
-    await axios.post('/api/upload', formData);
+    await axios.post('/api/video/upload', formData);
     toast.success('업로드 완료!');
     setFile(null);
     setIsUploading(false);
@@ -36,7 +36,7 @@ export default function Dashboard() {
     e.preventDefault();
     if (!url) return;
     setIsUploading(true);
-    await axios.post('/api/upload_url', null, { params: { url } });
+    await axios.post('/api/video/upload_url', null, { params: { url } });
     toast.success('URL 업로드 완료!');
     setUrl('');
     setIsUploading(false);
@@ -46,7 +46,9 @@ export default function Dashboard() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!search) return;
-    const res = await axios.get('/api/search', { params: { text: search } });
+    const res = await axios.get('/api/video/search', {
+      params: { text: search },
+    });
     setSearchResults(res.data);
     toast.success('검색 완료!');
   };
