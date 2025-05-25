@@ -116,12 +116,22 @@ def edit_video(
     filter_vertical: bool = Query(False, description="세로 영상 필터링 여부"),
     max_search_results: int = Query(10, description="최대 검색 결과 수", ge=1, le=50)
 ):
-    story_req = story_req.model_dump()
+    # 원본 StoryRequest 데이터 보존
+    original_story_request = story_req.model_dump()
+    
+    # 생성 옵션들 저장
+    generation_options = {
+        "avoid_duplicates": avoid_duplicates,
+        "filter_vertical": filter_vertical,
+        "max_search_results": max_search_results
+    }
+    
+    story_req_dict = story_req.model_dump()
     
     video_infos = []
     used_videos = set()  # 사용된 영상들을 추적
     
-    for scene in story_req["story"]:
+    for scene in story_req_dict["story"]:
         try:
             # 옵션에 따라 영상 선택
             file_name, metadata = select_video_with_options(
@@ -160,8 +170,13 @@ def edit_video(
     try:
         create_composite_video(video_infos, output_path)
         
-        # 4. DB에 생성 정보 저장
-        record_id = save_video_generation_info(output_path, video_infos)
+        # 4. DB에 생성 정보 저장 (원본 StoryRequest와 옵션들 포함)
+        record_id = save_video_generation_info(
+            output_path=output_path, 
+            video_infos=video_infos,
+            story_request=original_story_request,  # 원본 인풋 데이터
+            generation_options=generation_options  # 생성 옵션들
+        )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"비디오 합성 중 오류: {e}")
@@ -170,11 +185,7 @@ def edit_video(
         "result": "success", 
         "output_video": output_path, 
         "record_id": record_id,
-        "options_used": {
-            "avoid_duplicates": avoid_duplicates,
-            "filter_vertical": filter_vertical,
-            "max_search_results": max_search_results
-        },
+        "options_used": generation_options,
         "videos_used": list(used_videos) if avoid_duplicates else None
     }
 
@@ -248,6 +259,44 @@ def get_video_by_id(record_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"기록 조회 중 오류: {e}")
+
+@router.post("/video_regenerate/{record_id}")
+def regenerate_video_from_history(
+    record_id: int,
+    avoid_duplicates: bool = Query(False, description="중복 영상 방지 여부"),
+    filter_vertical: bool = Query(False, description="세로 영상 필터링 여부"),
+    max_search_results: int = Query(10, description="최대 검색 결과 수", ge=1, le=50)
+):
+    """
+    이전 기록의 StoryRequest를 사용하여 비디오를 다시 생성합니다.
+    """
+    try:
+        # 기존 기록 조회
+        record = get_video_generation_by_id(record_id)
+        
+        if not record:
+            raise HTTPException(status_code=404, detail="해당 ID의 기록을 찾을 수 없습니다.")
+        
+        # 원본 StoryRequest 데이터 추출
+        story_request = record.get('story_request')
+        if not story_request:
+            raise HTTPException(status_code=400, detail="해당 기록에 원본 StoryRequest 데이터가 없습니다.")
+        
+        # StoryRequest 객체로 변환
+        story_req = StoryRequest(**story_request)
+        
+        # 기존 edit_video 함수 로직 재사용
+        return edit_video(
+            story_req=story_req,
+            avoid_duplicates=avoid_duplicates,
+            filter_vertical=filter_vertical,
+            max_search_results=max_search_results
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"비디오 재생성 중 오류: {e}")
 
 @router.delete("/video_history/{record_id}")
 def delete_video_record(record_id: int, delete_file: bool = Query(False, description="실제 파일도 삭제할지 여부")):
