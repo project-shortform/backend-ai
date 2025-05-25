@@ -4,7 +4,7 @@ from typing import List, Optional
 from src.lib.embedding import search_chroma
 from src.lib.tts import generate_tts_audio
 from src.lib.edit import create_composite_video
-from src.db import save_video_generation_info
+from src.db import save_video_generation_info, get_video_generation_history, get_video_generation_by_id
 from moviepy import VideoFileClip
 import os
 import re
@@ -177,3 +177,109 @@ def edit_video(
         },
         "videos_used": list(used_videos) if avoid_duplicates else None
     }
+
+@router.get("/video_history")
+def get_video_history(
+    limit: Optional[int] = Query(None, description="가져올 기록 수 제한", ge=1),
+    offset: Optional[int] = Query(0, description="건너뛸 기록 수", ge=0)
+):
+    """
+    이전에 생성된 비디오들의 히스토리를 가져옵니다.
+    """
+    try:
+        all_records = get_video_generation_history()
+        
+        # 최신순으로 정렬 (created_at 기준 내림차순)
+        sorted_records = sorted(
+            all_records, 
+            key=lambda x: x.get('created_at', ''), 
+            reverse=True
+        )
+        
+        # offset과 limit 적용
+        if offset:
+            sorted_records = sorted_records[offset:]
+        
+        if limit:
+            sorted_records = sorted_records[:limit]
+        
+        # 각 레코드에 doc_id 추가 (TinyDB의 내부 ID)
+        for record in sorted_records:
+            if hasattr(record, 'doc_id'):
+                record['id'] = record.doc_id
+        
+        return {
+            "result": "success",
+            "total_count": len(all_records),
+            "returned_count": len(sorted_records),
+            "offset": offset,
+            "limit": limit,
+            "history": sorted_records
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"히스토리 조회 중 오류: {e}")
+
+@router.get("/video_history/{record_id}")
+def get_video_by_id(record_id: int):
+    """
+    특정 ID의 비디오 생성 기록을 가져옵니다.
+    """
+    try:
+        record = get_video_generation_by_id(record_id)
+        
+        if not record:
+            raise HTTPException(status_code=404, detail="해당 ID의 기록을 찾을 수 없습니다.")
+        
+        # doc_id 추가
+        record['id'] = record_id
+        
+        # 파일 존재 여부 확인
+        output_path = record.get('output_path')
+        file_exists = os.path.exists(output_path) if output_path else False
+        
+        return {
+            "result": "success",
+            "record": record,
+            "file_exists": file_exists
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"기록 조회 중 오류: {e}")
+
+@router.delete("/video_history/{record_id}")
+def delete_video_record(record_id: int, delete_file: bool = Query(False, description="실제 파일도 삭제할지 여부")):
+    """
+    특정 ID의 비디오 생성 기록을 삭제합니다.
+    """
+    try:
+        record = get_video_generation_by_id(record_id)
+        
+        if not record:
+            raise HTTPException(status_code=404, detail="해당 ID의 기록을 찾을 수 없습니다.")
+        
+        # 실제 파일 삭제 옵션
+        if delete_file:
+            output_path = record.get('output_path')
+            if output_path and os.path.exists(output_path):
+                try:
+                    os.remove(output_path)
+                except Exception as e:
+                    print(f"파일 삭제 중 오류: {output_path} - {e}")
+        
+        # DB에서 기록 삭제
+        from src.db import video_db
+        video_db.remove(doc_ids=[record_id])
+        
+        return {
+            "result": "success",
+            "message": f"기록 ID {record_id}가 삭제되었습니다.",
+            "file_deleted": delete_file
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"기록 삭제 중 오류: {e}")
