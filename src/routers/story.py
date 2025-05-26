@@ -109,6 +109,7 @@ def generate_story(input: StoryInput = Body(...)):
             - script 는 '영어'로 작성하세요.
             - subtitle 은 '한국어'로 작성하세요.
             - script는 영상 임베딩에 사용할 내용이므로 영상 임베딩에 최대의 효율을 낼 수 있도록 작성해줘.
+            - 하나의 scene에서 subtitle 문구가 끝나지 않아도 됩니다. 2개 이상의 scene에 subtitle 문구가 이어져도 무방합니다.
             
             <영상 분량(quantity) 조절 관련 참고 사항> 
             - 사용자가 입력한 분량 (예: 15초, 30초, 1분, 3분, 5분) 에 맞게 씬 개수를 적절히 선택하세요.
