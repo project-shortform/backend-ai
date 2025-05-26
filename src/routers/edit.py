@@ -1,3 +1,34 @@
+"""
+비디오 AI 생성 및 관리 API
+
+이 모듈은 다양한 방식으로 비디오를 생성하고 관리하는 API를 제공합니다.
+
+## 주요 API 엔드포인트
+
+### 🎬 비디오 생성 API
+1. **POST /api/ai/video_generate** - AI 기반 비디오 생성 (스크립트 자동 매칭)
+2. **POST /api/ai/video_generate_custom** - 커스텀 비디오 생성 (직접 파일 지정)
+3. **POST /api/ai/video_generate_flexible** - 유연한 비디오 생성 (다중 선택 방식)
+4. **POST /api/ai/video_generate_mixed** - 혼합 비디오 생성 (다양한 씬 타입 조합)
+
+### 📚 히스토리 관리 API
+5. **GET /api/ai/video_history** - 비디오 생성 히스토리 조회
+6. **GET /api/ai/video_history/{record_id}** - 특정 기록 상세 조회
+7. **POST /api/ai/video_regenerate/{record_id}** - 이전 기록으로 비디오 재생성
+8. **DELETE /api/ai/video_history/{record_id}** - 비디오 생성 기록 삭제
+
+## 특징
+- 🤖 AI 기반 영상 자동 매칭
+- 🎯 직접 파일 선택 옵션
+- 🔄 중복 영상 방지 기능
+- 📐 세로 영상 필터링
+- 💾 완전한 히스토리 관리
+- 🔊 TTS 기반 자막 음성 생성
+- 🎞️ 다양한 씬 타입 지원
+
+자세한 사용법은 각 엔드포인트의 documentation을 참고하세요.
+"""
+
 from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional, Union
