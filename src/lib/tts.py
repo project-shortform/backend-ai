@@ -7,13 +7,13 @@ from src.lib.llm import client  # OpenAI client import
 AUDIO_DIR = "./audios"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-def generate_tts_audio(text: str, voice: str = "alloy") -> str:
+def generate_tts_audio(text: str, voice: str = "onyx") -> str:
     """
     텍스트를 음성으로 변환하고 /audios 폴더에 UUID 기반 mp3 파일로 저장.
 
     Args:
         text (str): 음성으로 변환할 텍스트
-        voice (str): 사용할 음성 스타일 (예: alloy, nova 등)
+        voice (str): 사용할 음성 스타일 (예: onyx, nova 등)
 
     Returns:
         str: 저장된 mp3 파일의 경로
