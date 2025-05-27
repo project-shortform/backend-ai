@@ -207,6 +207,7 @@ def _async_edit_video(
                 raise Exception(f"Scene {scene['scene']}: {str(e)}")
 
             # subtitle을 TTS로 변환
+            print(actor_name)
             audio_path = generate_typecast_tts_audio(scene["subtitle"], actor_name)
 
             # video_infos에 정보 추가

@@ -23,7 +23,8 @@ TYPECAST_ACTORS = {
     "지윤": "62296627a4ff5d1ee6bf4ecc",
     "한준": "618b1849ef7827cfea34ea1e",
     "진우": "632293f759d649937b97f323",
-    "찬구": "5c547544fcfee90007fed455"
+    "찬구": "5c547544fcfee90007fed455",
+    "호빈이": "5ffda49bcba8f6d3d46fc447"
 }
 
 def generate_tts_audio(text: str, voice: str = "onyx") -> str:
