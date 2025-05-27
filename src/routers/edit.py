@@ -29,13 +29,15 @@
 자세한 사용법은 각 엔드포인트의 documentation을 참고하세요.
 """
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Optional, Union
 from src.lib.embedding import search_chroma
 from src.lib.tts import generate_tts_audio
-from src.lib.edit import create_composite_video
+from src.lib.edit import create_composite_video, cleanup_video_resources
 from src.db import save_video_generation_info, get_video_generation_history, get_video_generation_by_id
+from src.db import save_task_info, update_task_info, get_task_info, get_all_tasks, delete_task_info  # 태스크 DB 함수들
+from src.task_queue import get_task_queue, TaskStatus  # 태스크 큐
 from moviepy import VideoFileClip
 import os
 import re
@@ -160,6 +162,696 @@ def select_video_with_options(
         detail="조건을 만족하는 영상을 찾을 수 없습니다. (중복 방지 또는 세로 영상 필터링으로 인해 제외됨)"
     )
 
+# 비동기 처리를 위한 래퍼 함수들
+def _async_edit_video(
+    story_req_dict: dict,
+    avoid_duplicates: bool = False,
+    filter_vertical: bool = False,
+    max_search_results: int = 10,
+    task_id: str = None
+):
+    """비동기 비디오 생성 처리 함수"""
+    try:
+        # 원본 StoryRequest 데이터 보존
+        original_story_request = story_req_dict
+        
+        # 생성 옵션들 저장
+        generation_options = {
+            "avoid_duplicates": avoid_duplicates,
+            "filter_vertical": filter_vertical,
+            "max_search_results": max_search_results,
+            "async_processing": True
+        }
+        
+        video_infos = []
+        used_videos = set()
+        
+        for scene in story_req_dict["story"]:
+            try:
+                # 옵션에 따라 영상 선택
+                file_name, metadata = select_video_with_options(
+                    script=scene["script"],
+                    used_videos=used_videos,
+                    avoid_duplicates=avoid_duplicates,
+                    filter_vertical=filter_vertical,
+                    max_search_results=max_search_results
+                )
+                
+                # 사용된 영상 목록에 추가
+                if avoid_duplicates:
+                    used_videos.add(file_name)
+                    
+            except Exception as e:
+                raise Exception(f"Scene {scene['scene']}: {str(e)}")
+
+            # subtitle을 TTS로 변환
+            audio_path = generate_tts_audio(scene["subtitle"])
+
+            # video_infos에 정보 추가
+            video_infos.append({
+                "path": f"uploads/{file_name}",
+                "audio_path": audio_path,
+                "text": scene["subtitle"],
+                "scene": scene["scene"],
+                "script": scene["script"]
+            })
+
+        # 영상과 오디오, 자막 합치기
+        output_path = get_next_output_path()
+        
+        try:
+            create_composite_video(video_infos, output_path)
+        finally:
+            # 비디오 처리 후 자원 정리
+            cleanup_video_resources()
+        
+        # DB에 생성 정보 저장
+        record_id = save_video_generation_info(
+            output_path=output_path, 
+            video_infos=video_infos,
+            story_request=original_story_request,
+            generation_options=generation_options
+        )
+        
+        # 태스크 완료 정보 업데이트
+        if task_id:
+            update_task_info(task_id, {
+                "status": TaskStatus.COMPLETED.value,
+                "result": {
+                    "output_video": output_path,
+                    "record_id": record_id,
+                    "options_used": generation_options,
+                    "videos_used": list(used_videos) if avoid_duplicates else None
+                }
+            })
+        
+        return {
+            "result": "success", 
+            "output_video": output_path, 
+            "record_id": record_id,
+            "options_used": generation_options,
+            "videos_used": list(used_videos) if avoid_duplicates else None
+        }
+        
+    except Exception as e:
+        # 에러 발생 시에도 자원 정리
+        try:
+            cleanup_video_resources()
+        except:
+            pass
+            
+        # 태스크 실패 정보 업데이트
+        if task_id:
+            update_task_info(task_id, {
+                "status": TaskStatus.FAILED.value,
+                "error": {
+                    "message": str(e),
+                    "type": "video_generation_error"
+                }
+            })
+        raise e
+
+def _async_edit_video_mixed(
+    scenes_data: list,
+    avoid_duplicates: bool = False,
+    filter_vertical: bool = False,
+    max_search_results: int = 10,
+    skip_unresolved: bool = False,
+    task_id: str = None
+):
+    """비동기 혼합 비디오 생성 처리 함수"""
+    try:
+        original_request = scenes_data
+        
+        generation_options = {
+            "generation_type": "mixed",
+            "avoid_duplicates": avoid_duplicates,
+            "filter_vertical": filter_vertical,
+            "max_search_results": max_search_results,
+            "skip_unresolved": skip_unresolved,
+            "async_processing": True
+        }
+        
+        video_infos = []
+        used_videos = set()
+        skipped_scenes = []
+        
+        for i, scene in enumerate(scenes_data):
+            file_name = None
+            metadata = {}
+            selection_method = None
+            
+            try:
+                # Scene 타입 감지 및 처리
+                if "video_file_name" in scene and scene.get("video_file_name"):
+                    selection_method = "direct_file"
+                    file_name = scene["video_file_name"]
+                    video_path = f"uploads/{file_name}"
+                    
+                    if not os.path.exists(video_path):
+                        raise ValueError(f"파일 '{file_name}'을 찾을 수 없습니다.")
+                    
+                    if avoid_duplicates and file_name in used_videos:
+                        raise ValueError("중복된 영상입니다.")
+                    if filter_vertical and is_vertical_video(video_path):
+                        raise ValueError("세로 영상입니다.")
+                
+                elif "search_keywords" in scene and scene.get("search_keywords"):
+                    selection_method = "keyword_search"
+                    search_query = " ".join(scene["search_keywords"])
+                    file_name, metadata = select_video_with_options(
+                        script=search_query,
+                        used_videos=used_videos,
+                        avoid_duplicates=avoid_duplicates,
+                        filter_vertical=filter_vertical,
+                        max_search_results=max_search_results
+                    )
+                
+                elif "script" in scene and scene.get("script"):
+                    selection_method = "script_search"
+                    file_name, metadata = select_video_with_options(
+                        script=scene["script"],
+                        used_videos=used_videos,
+                        avoid_duplicates=avoid_duplicates,
+                        filter_vertical=filter_vertical,
+                        max_search_results=max_search_results
+                    )
+                
+                else:
+                    raise ValueError("유효한 비디오 선택 방법이 제공되지 않았습니다.")
+                
+                # 사용된 영상 추가
+                if avoid_duplicates:
+                    used_videos.add(file_name)
+                
+            except Exception as e:
+                if skip_unresolved:
+                    skipped_scenes.append({
+                        "scene": scene.get("scene", i + 1),
+                        "reason": str(e),
+                        "selection_method": selection_method
+                    })
+                    continue
+                else:
+                    raise Exception(f"Scene {scene.get('scene', i + 1)}: {str(e)}")
+            
+            # TTS 생성
+            audio_path = generate_tts_audio(scene["subtitle"])
+            
+            # video_infos에 정보 추가
+            video_infos.append({
+                "path": f"uploads/{file_name}",
+                "audio_path": audio_path,
+                "text": scene["subtitle"],
+                "scene": scene.get("scene", i + 1),
+                "script": scene.get("script", ""),
+                "search_keywords": scene.get("search_keywords"),
+                "video_file_name": scene.get("video_file_name"),
+                "selection_method": selection_method,
+                "metadata": metadata
+            })
+        
+        if not video_infos:
+            raise Exception("처리할 수 있는 비디오가 없습니다.")
+        
+        # 영상 합성
+        output_path = get_next_output_path()
+        
+        try:
+            create_composite_video(video_infos, output_path)
+        finally:
+            # 비디오 처리 후 자원 정리
+            cleanup_video_resources()
+        
+        # DB에 저장
+        record_id = save_video_generation_info(
+            output_path=output_path,
+            video_infos=video_infos,
+            story_request={"scenes": original_request},
+            generation_options=generation_options
+        )
+        
+        # 태스크 완료 정보 업데이트
+        if task_id:
+            update_task_info(task_id, {
+                "status": TaskStatus.COMPLETED.value,
+                "result": {
+                    "output_video": output_path,
+                    "record_id": record_id,
+                    "options_used": generation_options,
+                    "videos_used": list(used_videos) if avoid_duplicates else None,
+                    "skipped_scenes": skipped_scenes if skipped_scenes else None,
+                    "processed_scenes": len(video_infos)
+                }
+            })
+
+        return {
+            "result": "success",
+            "output_video": output_path,
+            "record_id": record_id,
+            "options_used": generation_options,
+            "videos_used": list(used_videos) if avoid_duplicates else None,
+            "skipped_scenes": skipped_scenes if skipped_scenes else None,
+            "processed_scenes": len(video_infos)
+        }
+        
+    except Exception as e:
+        # 에러 발생 시에도 자원 정리
+        try:
+            cleanup_video_resources()
+        except:
+            pass
+            
+        # 태스크 실패 정보 업데이트
+        if task_id:
+            update_task_info(task_id, {
+                "status": TaskStatus.FAILED.value,
+                "error": {
+                    "message": str(e),
+                    "type": "mixed_video_generation_error"
+                }
+            })
+        raise e
+
+@router.post("/video_generate_async",
+    summary="🚀 비동기 AI 기반 비디오 생성",
+    description="""
+    **스크립트를 기반으로 비동기적으로 영상을 생성합니다.**
+    
+    ## 주요 기능
+    - 🔄 백그라운드에서 비디오 생성 처리
+    - 📊 실시간 진행 상태 추적
+    - ⚡ 즉시 태스크 ID 반환
+    - 🎯 큐 기반 순차 처리
+    
+    ## 처리 흐름
+    1. **요청 접수**: 즉시 태스크 ID 반환
+    2. **큐 대기**: 다른 작업 완료 후 순차 처리
+    3. **비디오 생성**: 백그라운드에서 실제 작업 수행
+    4. **결과 저장**: 완료 후 결과를 DB에 저장
+    
+    ## 사용 예시
+    ```json
+    {
+      "story": [
+        {
+          "scene": 1,
+          "script": "아름다운 바다 풍경과 석양",
+          "subtitle": "오늘은 정말 아름다운 하루였습니다."
+        }
+      ]
+    }
+    ```
+    
+    ## 응답 예시
+    ```json
+    {
+      "result": "success",
+      "task_id": "550e8400-e29b-41d4-a716-446655440000",
+      "status": "pending",
+      "message": "비디오 생성 작업이 큐에 추가되었습니다.",
+      "queue_position": 2
+    }
+    ```
+    
+    ## 상태 확인
+    반환된 `task_id`로 `/api/ai/task_status/{task_id}` 엔드포인트에서 진행 상황을 확인할 수 있습니다.
+    """,
+    response_description="태스크 ID와 초기 상태를 반환합니다.",
+    tags=["Video Generation", "Async"]
+)
+def edit_video_async(
+    story_req: StoryRequest,
+    avoid_duplicates: bool = Query(False, description="중복 영상 방지 여부"),
+    filter_vertical: bool = Query(False, description="세로 영상 필터링 여부"),
+    max_search_results: int = Query(10, description="최대 검색 결과 수", ge=1, le=50)
+):
+    """비동기적으로 비디오를 생성합니다."""
+    
+    # 태스크 큐 가져오기
+    queue = get_task_queue()
+    
+    # 태스크를 큐에 추가
+    task_id = queue.add_task(
+        task_func=_async_edit_video,
+        task_kwargs={
+            "story_req_dict": story_req.model_dump(),
+            "avoid_duplicates": avoid_duplicates,
+            "filter_vertical": filter_vertical,
+            "max_search_results": max_search_results,
+            "task_id": None  # 나중에 설정됨
+        },
+        task_type="video_generation"
+    )
+    
+    # 태스크 ID를 함수 인자에 추가
+    task_info = queue.get_task_status(task_id)
+    if task_info:
+        with queue._lock:
+            queue.tasks[task_id]["kwargs"]["task_id"] = task_id
+    
+    # DB에 태스크 정보 저장
+    save_task_info(task_id, {
+        "type": "video_generation",
+        "status": TaskStatus.PENDING.value,
+        "request_data": story_req.model_dump(),
+        "options": {
+            "avoid_duplicates": avoid_duplicates,
+            "filter_vertical": filter_vertical,
+            "max_search_results": max_search_results
+        }
+    })
+    
+    # 큐 상태 조회
+    queue_status = queue.get_queue_status()
+    
+    return {
+        "result": "success",
+        "task_id": task_id,
+        "status": "pending",
+        "message": "비디오 생성 작업이 큐에 추가되었습니다.",
+        "queue_position": queue_status["pending"],
+        "estimated_wait_time": f"{queue_status['pending'] * 2-5}분"  # 대략적인 예상 시간
+    }
+
+@router.post("/video_generate_mixed_async",
+    summary="🚀 비동기 혼합 비디오 생성",
+    description="""
+    **다양한 타입의 씬들을 비동기적으로 혼합하여 영상을 생성합니다.**
+    
+    ## 주요 기능
+    - 🔄 백그라운드에서 복잡한 혼합 비디오 처리
+    - 📊 실시간 진행 상태 추적
+    - ⚡ 즉시 태스크 ID 반환
+    - 🎯 모든 씬 타입 지원 (Scene, CustomScene, FlexibleScene)
+    
+    ## 사용 예시
+    ```json
+    [
+      {
+        "scene": 1,
+        "script": "바다와 석양",
+        "subtitle": "AI가 선택한 바다 영상입니다."
+      },
+      {
+        "scene": 2,
+        "video_file_name": "my_video.mp4",
+        "subtitle": "직접 지정한 영상입니다."
+      }
+    ]
+    ```
+    
+    ## 응답 예시
+    ```json
+    {
+      "result": "success",
+      "task_id": "550e8400-e29b-41d4-a716-446655440001",
+      "status": "pending",
+      "message": "혼합 비디오 생성 작업이 큐에 추가되었습니다.",
+      "queue_position": 1
+    }
+    ```
+    """,
+    response_description="태스크 ID와 초기 상태를 반환합니다.",
+    tags=["Video Generation", "Async", "Mixed"]
+)
+def edit_video_mixed_async(
+    scenes: List[Union[Scene, CustomScene, FlexibleScene]],
+    avoid_duplicates: bool = Query(False, description="중복 영상 방지 여부"),
+    filter_vertical: bool = Query(False, description="세로 영상 필터링 여부"),
+    max_search_results: int = Query(10, description="최대 검색 결과 수", ge=1, le=50),
+    skip_unresolved: bool = Query(False, description="해결되지 않는 씬 건너뛰기")
+):
+    """비동기적으로 혼합 비디오를 생성합니다."""
+    
+    # 씬 데이터를 딕셔너리로 변환
+    scenes_data = []
+    for scene_data in scenes:
+        if hasattr(scene_data, 'model_dump'):
+            scenes_data.append(scene_data.model_dump())
+        elif hasattr(scene_data, 'dict'):
+            scenes_data.append(scene_data.dict())
+        else:
+            scenes_data.append(scene_data)
+    
+    # 태스크 큐 가져오기
+    queue = get_task_queue()
+    
+    # 태스크를 큐에 추가
+    task_id = queue.add_task(
+        task_func=_async_edit_video_mixed,
+        task_kwargs={
+            "scenes_data": scenes_data,
+            "avoid_duplicates": avoid_duplicates,
+            "filter_vertical": filter_vertical,
+            "max_search_results": max_search_results,
+            "skip_unresolved": skip_unresolved,
+            "task_id": None  # 나중에 설정됨
+        },
+        task_type="mixed_video_generation"
+    )
+    
+    # 태스크 ID를 함수 인자에 추가
+    task_info = queue.get_task_status(task_id)
+    if task_info:
+        with queue._lock:
+            queue.tasks[task_id]["kwargs"]["task_id"] = task_id
+    
+    # DB에 태스크 정보 저장
+    save_task_info(task_id, {
+        "type": "mixed_video_generation",
+        "status": TaskStatus.PENDING.value,
+        "request_data": {"scenes": scenes_data},
+        "options": {
+            "avoid_duplicates": avoid_duplicates,
+            "filter_vertical": filter_vertical,
+            "max_search_results": max_search_results,
+            "skip_unresolved": skip_unresolved
+        }
+    })
+    
+    # 큐 상태 조회
+    queue_status = queue.get_queue_status()
+    
+    return {
+        "result": "success",
+        "task_id": task_id,
+        "status": "pending",
+        "message": "혼합 비디오 생성 작업이 큐에 추가되었습니다.",
+        "queue_position": queue_status["pending"],
+        "estimated_wait_time": f"{queue_status['pending'] * 3-7}분"  # 혼합 비디오는 더 오래 걸림
+    }
+
+@router.get("/task_status/{task_id}",
+    summary="📊 태스크 상태 조회",
+    description="""
+    **특정 태스크의 현재 상태와 진행 상황을 조회합니다.**
+    
+    ## 태스크 상태
+    - **pending**: 대기 중 (큐에서 순서를 기다리는 중)
+    - **processing**: 처리 중 (실제 비디오 생성 작업 수행 중)
+    - **completed**: 완료 (비디오 생성 완료, 결과 확인 가능)
+    - **failed**: 실패 (에러 발생, 에러 메시지 확인 가능)
+    
+    ## 응답 예시
+    
+    ### 대기 중
+    ```json
+    {
+      "result": "success",
+      "task": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "type": "video_generation",
+        "status": "pending",
+        "created_at": "2024-01-01T12:00:00",
+        "progress": 0
+      },
+      "queue_position": 2
+    }
+    ```
+    
+    ### 처리 중
+    ```json
+    {
+      "result": "success",
+      "task": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "type": "video_generation",
+        "status": "processing",
+        "started_at": "2024-01-01T12:05:00",
+        "progress": 45
+      }
+    }
+    ```
+    
+    ### 완료
+    ```json
+    {
+      "result": "success",
+      "task": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "type": "video_generation",
+        "status": "completed",
+        "completed_at": "2024-01-01T12:10:00",
+        "progress": 100,
+        "result": {
+          "output_video": "output/final_edit_1.mp4",
+          "record_id": 1
+        }
+      }
+    }
+    ```
+    """,
+    response_description="태스크의 현재 상태와 진행 정보를 반환합니다.",
+    tags=["Task Management"]
+)
+def get_task_status(task_id: str):
+    """태스크 상태를 조회합니다."""
+    
+    # 메모리 큐에서 상태 조회
+    queue = get_task_queue()
+    task_status = queue.get_task_status(task_id)
+    
+    if not task_status:
+        # DB에서 조회 (워커 재시작 등의 경우)
+        db_task = get_task_info(task_id)
+        if not db_task:
+            raise HTTPException(status_code=404, detail="해당 태스크를 찾을 수 없습니다.")
+        
+        return {
+            "result": "success",
+            "task": {
+                "id": task_id,
+                "type": db_task.get("type"),
+                "status": db_task.get("status"),
+                "created_at": db_task.get("created_at"),
+                "updated_at": db_task.get("updated_at"),
+                "result": db_task.get("result"),
+                "error": db_task.get("error")
+            },
+            "source": "database"
+        }
+    
+    # 큐 위치 계산 (pending 상태인 경우)
+    queue_position = None
+    if task_status["status"] == "pending":
+        queue_status = queue.get_queue_status()
+        queue_position = queue_status["pending"]
+    
+    return {
+        "result": "success",
+        "task": task_status,
+        "queue_position": queue_position,
+        "source": "memory"
+    }
+
+@router.get("/queue_status",
+    summary="🔄 태스크 큐 상태 조회",
+    description="""
+    **전체 태스크 큐의 현재 상태를 조회합니다.**
+    
+    ## 주요 정보
+    - 큐 실행 상태 (실행 중/중지)
+    - 대기 중인 태스크 수
+    - 처리 중인 태스크 수
+    - 완료/실패한 태스크 수
+    - 전체 태스크 수
+    
+    ## 응답 예시
+    ```json
+    {
+      "result": "success",
+      "queue": {
+        "is_running": true,
+        "queue_size": 3,
+        "total_tasks": 15,
+        "pending": 3,
+        "processing": 1,
+        "completed": 10,
+        "failed": 1
+      },
+      "recent_tasks": [
+        {
+          "id": "task-1",
+          "type": "video_generation",
+          "status": "completed",
+          "created_at": "2024-01-01T12:00:00"
+        }
+      ]
+    }
+    ```
+    """,
+    response_description="태스크 큐의 전체 상태 정보를 반환합니다.",
+    tags=["Task Management"]
+)
+def get_queue_status():
+    """태스크 큐 상태를 조회합니다."""
+    
+    queue = get_task_queue()
+    queue_status = queue.get_queue_status()
+    all_tasks = queue.get_all_tasks()
+    
+    # 최근 태스크들 (최대 10개)
+    recent_tasks = sorted(
+        all_tasks.values(),
+        key=lambda x: x.get("created_at", ""),
+        reverse=True
+    )[:10]
+    
+    return {
+        "result": "success",
+        "queue": queue_status,
+        "recent_tasks": recent_tasks
+    }
+
+@router.delete("/task/{task_id}",
+    summary="🗑️ 태스크 삭제",
+    description="""
+    **특정 태스크를 삭제합니다.**
+    
+    ## 주의사항
+    - 처리 중인 태스크는 삭제할 수 없습니다
+    - 완료된 태스크의 결과 파일은 별도로 삭제해야 합니다
+    - 삭제된 태스크는 복구할 수 없습니다
+    
+    ## 응답 예시
+    ```json
+    {
+      "result": "success",
+      "message": "태스크가 삭제되었습니다.",
+      "task_id": "550e8400-e29b-41d4-a716-446655440000"
+    }
+    ```
+    """,
+    response_description="삭제 결과를 반환합니다.",
+    tags=["Task Management"]
+)
+def delete_task(task_id: str):
+    """태스크를 삭제합니다."""
+    
+    queue = get_task_queue()
+    task_status = queue.get_task_status(task_id)
+    
+    if not task_status:
+        raise HTTPException(status_code=404, detail="해당 태스크를 찾을 수 없습니다.")
+    
+    if task_status["status"] == "processing":
+        raise HTTPException(status_code=400, detail="처리 중인 태스크는 삭제할 수 없습니다.")
+    
+    # 메모리에서 삭제
+    with queue._lock:
+        if task_id in queue.tasks:
+            del queue.tasks[task_id]
+    
+    # DB에서 삭제
+    delete_task_info(task_id)
+    
+    return {
+        "result": "success",
+        "message": "태스크가 삭제되었습니다.",
+        "task_id": task_id
+    }
+
 @router.post("/video_generate", 
     summary="AI 기반 비디오 생성 (스크립트 자동 매칭)",
     description="""
@@ -170,6 +862,7 @@ def select_video_with_options(
     - TTS를 통한 자막 음성 생성
     - 중복 영상 방지 및 세로 영상 필터링 옵션
     - 생성 이력 자동 저장
+    - 🧹 자동 자원 정리 (FFmpeg 프로세스 누수 방지)
     
     ## 사용 예시
     ```json
@@ -203,78 +896,22 @@ def edit_video(
     filter_vertical: bool = Query(False, description="세로 영상 필터링 여부"),
     max_search_results: int = Query(10, description="최대 검색 결과 수", ge=1, le=50)
 ):
-    # 원본 StoryRequest 데이터 보존
-    original_story_request = story_req.model_dump()
-    
-    # 생성 옵션들 저장
-    generation_options = {
-        "avoid_duplicates": avoid_duplicates,
-        "filter_vertical": filter_vertical,
-        "max_search_results": max_search_results
-    }
-    
-    story_req_dict = story_req.model_dump()
-    
-    video_infos = []
-    used_videos = set()  # 사용된 영상들을 추적
-    
-    for scene in story_req_dict["story"]:
-        try:
-            # 옵션에 따라 영상 선택
-            file_name, metadata = select_video_with_options(
-                script=scene["script"],
-                used_videos=used_videos,
-                avoid_duplicates=avoid_duplicates,
-                filter_vertical=filter_vertical,
-                max_search_results=max_search_results
-            )
-            
-            # 사용된 영상 목록에 추가
-            if avoid_duplicates:
-                used_videos.add(file_name)
-                
-        except HTTPException as e:
-            # 더 구체적인 에러 메시지
-            raise HTTPException(
-                status_code=e.status_code, 
-                detail=f"Scene {scene['scene']}: {e.detail}"
-            )
-
-        # 2. subtitle을 TTS로 변환
-        audio_path = generate_tts_audio(scene["subtitle"])
-
-        # video_infos에 정보 추가
-        video_infos.append({
-            "path": f"uploads/{file_name}",
-            "audio_path": audio_path,
-            "text": scene["subtitle"],
-            "scene": scene["scene"],
-            "script": scene["script"]
-        })
-
-    # 3. 영상과 오디오, 자막 합치기 (lib 함수 사용)
-    output_path = get_next_output_path()
     try:
-        create_composite_video(video_infos, output_path)
-        
-        # 4. DB에 생성 정보 저장 (원본 StoryRequest와 옵션들 포함)
-        record_id = save_video_generation_info(
-            output_path=output_path, 
-            video_infos=video_infos,
-            story_request=original_story_request,  # 원본 인풋 데이터
-            generation_options=generation_options  # 생성 옵션들
+        # 기존 로직 실행
+        return _async_edit_video(
+            story_req_dict=story_req.model_dump(),
+            avoid_duplicates=avoid_duplicates,
+            filter_vertical=filter_vertical,
+            max_search_results=max_search_results,
+            task_id=None
         )
-        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"비디오 합성 중 오류: {e}")
-
-    return {
-        "result": "success", 
-        "output_video": output_path, 
-        "record_id": record_id,
-        "options_used": generation_options,
-        "videos_used": list(used_videos) if avoid_duplicates else None
-    }
+        # 에러 발생 시에도 자원 정리
+        try:
+            cleanup_video_resources()
+        except:
+            pass
+        raise HTTPException(status_code=500, detail=f"비디오 생성 중 오류: {e}")
 
 @router.get("/video_history",
     summary="비디오 생성 히스토리 조회",
@@ -810,9 +1447,9 @@ def edit_video_flexible(
         try:
             # 1. 직접 파일명이 지정된 경우
             if scene.get("video_file_name"):
+                selection_method = "direct_file"
                 file_name = scene["video_file_name"]
                 video_path = f"uploads/{file_name}"
-                selection_method = "direct_file"
                 
                 if not os.path.exists(video_path):
                     raise ValueError(f"파일 '{file_name}'을 찾을 수 없습니다.")
@@ -1003,14 +1640,14 @@ def edit_video_mixed(
     used_videos = set()
     skipped_scenes = []
     
-    for i, scene_data in enumerate(scenes):
+    for i, scene in enumerate(scenes):
         # Pydantic 모델을 딕셔너리로 변환
-        if hasattr(scene_data, 'model_dump'):
-            scene = scene_data.model_dump()
-        elif hasattr(scene_data, 'dict'):
-            scene = scene_data.dict()
+        if hasattr(scene, 'model_dump'):
+            scene = scene.model_dump()
+        elif hasattr(scene, 'dict'):
+            scene = scene.dict()
         else:
-            scene = scene_data
+            scene = scene
         
         file_name = None
         metadata = {}
@@ -1019,7 +1656,6 @@ def edit_video_mixed(
         try:
             # Scene 타입 감지 및 처리
             if "video_file_name" in scene and scene.get("video_file_name"):
-                # CustomScene 또는 FlexibleScene with direct file
                 selection_method = "direct_file"
                 file_name = scene["video_file_name"]
                 video_path = f"uploads/{file_name}"
@@ -1033,7 +1669,6 @@ def edit_video_mixed(
                     raise ValueError("세로 영상입니다.")
             
             elif "search_keywords" in scene and scene.get("search_keywords"):
-                # FlexibleScene with keywords
                 selection_method = "keyword_search"
                 search_query = " ".join(scene["search_keywords"])
                 file_name, metadata = select_video_with_options(
@@ -1045,7 +1680,6 @@ def edit_video_mixed(
                 )
             
             elif "script" in scene and scene.get("script"):
-                # Scene or FlexibleScene with script
                 selection_method = "script_search"
                 file_name, metadata = select_video_with_options(
                     script=scene["script"],
@@ -1110,7 +1744,7 @@ def edit_video_mixed(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"비디오 합성 중 오류: {e}")
-
+    
     return {
         "result": "success",
         "output_video": output_path,
