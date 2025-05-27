@@ -7,7 +7,9 @@
 
 ### 🎬 비디오 생성 API
 1. **POST /api/ai/video_generate** - AI 기반 비디오 생성 (스크립트 자동 매칭)
-2. **POST /api/ai/video_generate_mixed** - 혼합 비디오 생성 (다양한 씬 타입 조합)
+2. **POST /api/ai/video_generate_custom** - 커스텀 비디오 생성 (직접 파일 지정)
+3. **POST /api/ai/video_generate_flexible** - 유연한 비디오 생성 (다중 선택 방식)
+4. **POST /api/ai/video_generate_mixed** - 혼합 비디오 생성 (다양한 씬 타입 조합)
 
 ### 📚 히스토리 관리 API
 5. **GET /api/ai/video_history** - 비디오 생성 히스토리 조회
@@ -169,7 +171,6 @@ def _async_edit_video(
     avoid_duplicates: bool = False,
     filter_vertical: bool = False,
     max_search_results: int = 10,
-    actor_name: Optional[str] = "현주",
     task_id: str = None
 ):
     """비동기 비디오 생성 처리 함수"""
@@ -207,6 +208,7 @@ def _async_edit_video(
                 raise Exception(f"Scene {scene['scene']}: {str(e)}")
 
             # subtitle을 TTS로 변환
+            actor_name = scene.get("actor_name", "현주")
             audio_path = generate_typecast_tts_audio(scene["subtitle"], actor_name)
 
             # video_infos에 정보 추가
@@ -461,6 +463,7 @@ def _async_edit_video_mixed(
           "scene": 1,
           "script": "아름다운 바다 풍경과 석양",
           "subtitle": "오늘은 정말 아름다운 하루였습니다.",
+          "actor_name": "현주"
         }
       ]
     }
@@ -485,7 +488,6 @@ def _async_edit_video_mixed(
 )
 def edit_video_async(
     story_req: StoryRequest,
-    actor_name: Optional[str] = "현주",
     avoid_duplicates: bool = Query(False, description="중복 영상 방지 여부"),
     filter_vertical: bool = Query(False, description="세로 영상 필터링 여부"),
     max_search_results: int = Query(10, description="최대 검색 결과 수", ge=1, le=50)
@@ -500,7 +502,6 @@ def edit_video_async(
         task_func=_async_edit_video,
         task_kwargs={
             "story_req_dict": story_req.model_dump(),
-            "actor_name": actor_name,
             "avoid_duplicates": avoid_duplicates,
             "filter_vertical": filter_vertical,
             "max_search_results": max_search_results,
@@ -523,8 +524,7 @@ def edit_video_async(
         "options": {
             "avoid_duplicates": avoid_duplicates,
             "filter_vertical": filter_vertical,
-            "max_search_results": max_search_results,
-            "actor_name": actor_name
+            "max_search_results": max_search_results
         }
     })
     
