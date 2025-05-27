@@ -4,7 +4,7 @@ import axios from 'axios';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 
-axios.defaults.baseURL = 'http://49.143.34.88:5000/';
+axios.defaults.baseURL = 'https://hzit42bv0qlx.share.zrok.io/';
 
 export default function VideoDetail() {
   const { fileName } = useParams<{ fileName: string }>();

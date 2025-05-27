@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 
-axios.defaults.baseURL = 'http://49.143.34.88:5000/';
+axios.defaults.baseURL = 'https://hzit42bv0qlx.share.zrok.io/';
 
 export default function Dashboard() {
   const [file, setFile] = useState<File | null>(null);
@@ -48,6 +48,10 @@ export default function Dashboard() {
     if (!search) return;
     const res = await axios.get('/api/video/search', {
       params: { text: search },
+      headers: {
+        'Content-Type': 'application/json',
+        skip_zrok_interstitial: 'true',
+      },
     });
     setSearchResults(res.data);
     toast.success('검색 완료!');

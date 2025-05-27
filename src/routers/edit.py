@@ -33,7 +33,7 @@ from fastapi import APIRouter, Body, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Optional, Union
 from src.lib.embedding import search_chroma
-from src.lib.tts import generate_tts_audio
+from src.lib.tts import generate_typecast_tts_audio
 from src.lib.edit import create_composite_video, cleanup_video_resources
 from src.db import save_video_generation_info, get_video_generation_history, get_video_generation_by_id
 from src.db import save_task_info, update_task_info, get_task_info, get_all_tasks, delete_task_info  # 태스크 DB 함수들
@@ -48,6 +48,7 @@ class Scene(BaseModel):
     scene: int
     script: str
     subtitle: str
+    actor_name: Optional[str] = "현주"
 
 class StoryRequest(BaseModel):
     story: List[Scene]
@@ -57,6 +58,7 @@ class CustomScene(BaseModel):
     video_file_name: str  # 직접 지정할 비디오 파일명
     subtitle: str
     script: Optional[str] = None  # 선택적 스크립트 (기록용)
+    actor_name: Optional[str] = "현주"
 
 class CustomStoryRequest(BaseModel):
     story: List[CustomScene]
@@ -68,6 +70,7 @@ class FlexibleScene(BaseModel):
     video_file_name: Optional[str] = None  # 직접 파일명 지정
     script: Optional[str] = None  # 스크립트로 검색
     search_keywords: Optional[List[str]] = None  # 키워드 리스트로 검색
+    actor_name: Optional[str] = "현주"
     
 class FlexibleStoryRequest(BaseModel):
     story: List[FlexibleScene]
@@ -205,7 +208,8 @@ def _async_edit_video(
                 raise Exception(f"Scene {scene['scene']}: {str(e)}")
 
             # subtitle을 TTS로 변환
-            audio_path = generate_tts_audio(scene["subtitle"])
+            actor_name = scene.get("actor_name", "현주")
+            audio_path = generate_typecast_tts_audio(scene["subtitle"], actor_name)
 
             # video_infos에 정보 추가
             video_infos.append({
@@ -356,7 +360,8 @@ def _async_edit_video_mixed(
                     raise Exception(f"Scene {scene.get('scene', i + 1)}: {str(e)}")
             
             # TTS 생성
-            audio_path = generate_tts_audio(scene["subtitle"])
+            actor_name = scene.get("actor_name", "현주")
+            audio_path = generate_typecast_tts_audio(scene["subtitle"], actor_name)
             
             # video_infos에 정보 추가
             video_infos.append({
@@ -457,7 +462,8 @@ def _async_edit_video_mixed(
         {
           "scene": 1,
           "script": "아름다운 바다 풍경과 석양",
-          "subtitle": "오늘은 정말 아름다운 하루였습니다."
+          "subtitle": "오늘은 정말 아름다운 하루였습니다.",
+          "actor_name": "현주"
         }
       ]
     }
@@ -551,12 +557,14 @@ def edit_video_async(
       {
         "scene": 1,
         "script": "바다와 석양",
-        "subtitle": "AI가 선택한 바다 영상입니다."
+        "subtitle": "AI가 선택한 바다 영상입니다.",
+        "actor_name": "현주"
       },
       {
         "scene": 2,
         "video_file_name": "my_video.mp4",
-        "subtitle": "직접 지정한 영상입니다."
+        "subtitle": "직접 지정한 영상입니다.",
+        "actor_name": "지윤"
       }
     ]
     ```
@@ -871,12 +879,14 @@ def delete_task(task_id: str):
         {
           "scene": 1,
           "script": "아름다운 바다 풍경과 석양",
-          "subtitle": "오늘은 정말 아름다운 하루였습니다."
+          "subtitle": "오늘은 정말 아름다운 하루였습니다.",
+          "actor_name": "현주"
         },
         {
           "scene": 2,
           "script": "도시의 야경과 불빛들",
-          "subtitle": "밤이 되면서 도시가 빛나기 시작했습니다."
+          "subtitle": "밤이 되면서 도시가 빛나기 시작했습니다.",
+          "actor_name": "지윤"
         }
       ]
     }
@@ -886,6 +896,7 @@ def delete_task(task_id: str):
     - **avoid_duplicates**: 같은 영상이 여러 씬에서 사용되는 것을 방지
     - **filter_vertical**: 세로 영상(세로가 가로보다 긴)을 제외하고 검색
     - **max_search_results**: 검색할 후보 영상의 최대 개수 (1-50)
+    - **actor_name**: TTS 음성 액터 (현주, 지윤, 한준, 진우, 찬구 중 선택, 기본값: 현주)
     """,
     response_description="생성된 비디오 정보와 기록 ID를 반환합니다.",
     tags=["Video Generation"]
@@ -1230,12 +1241,14 @@ def delete_video_record(record_id: int, delete_file: bool = Query(False, descrip
           "scene": 1,
           "video_file_name": "beach_sunset.mp4",
           "subtitle": "아름다운 석양이 바다를 물들입니다.",
-          "script": "바다 석양 풍경"
+          "script": "바다 석양 풍경",
+          "actor_name": "현주"
         },
         {
           "scene": 2,
           "video_file_name": "city_night.mp4",
-          "subtitle": "도시의 밤이 시작됩니다."
+          "subtitle": "도시의 밤이 시작됩니다.",
+          "actor_name": "한준"
         }
       ]
     }
@@ -1243,6 +1256,7 @@ def delete_video_record(record_id: int, delete_file: bool = Query(False, descrip
     
     ## 옵션 설명
     - **skip_missing_files**: true 시 존재하지 않는 파일의 씬을 건너뛰고 계속 진행
+    - **actor_name**: TTS 음성 액터 (현주, 지윤, 한준, 진우, 찬구 중 선택, 기본값: 현주)
     
     ## 응답 예시
     ```json
@@ -1306,7 +1320,8 @@ def edit_video_custom(
                 )
         
         # TTS 생성
-        audio_path = generate_tts_audio(scene["subtitle"])
+        actor_name = scene.get("actor_name", "현주")
+        audio_path = generate_typecast_tts_audio(scene["subtitle"], actor_name)
         
         # video_infos에 정보 추가
         video_infos.append({
@@ -1363,17 +1378,20 @@ def edit_video_custom(
         {
           "scene": 1,
           "subtitle": "직접 지정한 영상입니다.",
-          "video_file_name": "specific_video.mp4"
+          "video_file_name": "specific_video.mp4",
+          "actor_name": "현주"
         },
         {
           "scene": 2,
           "subtitle": "스크립트로 검색한 영상입니다.",
-          "script": "아름다운 자연 풍경과 산"
+          "script": "아름다운 자연 풍경과 산",
+          "actor_name": "지윤"
         },
         {
           "scene": 3,
           "subtitle": "키워드로 검색한 영상입니다.",
-          "search_keywords": ["도시", "야경", "불빛", "건물"]
+          "search_keywords": ["도시", "야경", "불빛", "건물"],
+          "actor_name": "진우"
         }
       ]
     }
@@ -1384,6 +1402,7 @@ def edit_video_custom(
     - **filter_vertical**: 세로 영상 제외
     - **max_search_results**: 검색 후보 수 (1-50)
     - **skip_unresolved**: 해결되지 않는 씬 건너뛰기
+    - **actor_name**: TTS 음성 액터 (현주, 지윤, 한준, 진우, 찬구 중 선택, 기본값: 현주)
     
     ## 응답 예시
     ```json
@@ -1506,7 +1525,8 @@ def edit_video_flexible(
                 )
         
         # TTS 생성
-        audio_path = generate_tts_audio(scene["subtitle"])
+        actor_name = scene.get("actor_name", "현주")
+        audio_path = generate_typecast_tts_audio(scene["subtitle"], actor_name)
         
         # video_infos에 정보 추가
         video_infos.append({
@@ -1565,22 +1585,26 @@ def edit_video_flexible(
       {
         "scene": 1,
         "script": "바다와 석양",
-        "subtitle": "AI가 선택한 바다 영상입니다."
+        "subtitle": "AI가 선택한 바다 영상입니다.",
+        "actor_name": "현주"
       },
       {
         "scene": 2,
         "video_file_name": "my_video.mp4",
-        "subtitle": "직접 지정한 영상입니다."
+        "subtitle": "직접 지정한 영상입니다.",
+        "actor_name": "지윤"
       },
       {
         "scene": 3,
         "search_keywords": ["산", "자연", "녹색"],
-        "subtitle": "키워드로 찾은 산 영상입니다."
+        "subtitle": "키워드로 찾은 산 영상입니다.",
+        "actor_name": "한준"
       },
       {
         "scene": 4,
         "script": "도시 야경",
-        "subtitle": "마지막 도시 영상입니다."
+        "subtitle": "마지막 도시 영상입니다.",
+        "actor_name": "진우"
       }
     ]
     ```
@@ -1589,6 +1613,7 @@ def edit_video_flexible(
     - **씬 타입 자동 감지**: 각 씬의 필드를 분석하여 적절한 처리 방식 자동 선택
     - **유연한 구조**: 배열 형태로 순서대로 씬 정의
     - **모든 옵션 지원**: 중복 방지, 세로 영상 필터링 등 모든 기능 사용 가능
+    - **actor_name 지원**: 각 씬별로 다른 TTS 음성 액터 선택 가능 (현주, 지윤, 한준, 진우, 찬구)
     
     ## 응답 예시
     ```json
@@ -1711,7 +1736,8 @@ def edit_video_mixed(
                 )
         
         # TTS 생성
-        audio_path = generate_tts_audio(scene["subtitle"])
+        actor_name = scene.get("actor_name", "현주")
+        audio_path = generate_typecast_tts_audio(scene["subtitle"], actor_name)
         
         # video_infos에 정보 추가
         video_infos.append({
