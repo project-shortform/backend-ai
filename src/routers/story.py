@@ -143,3 +143,86 @@ def generate_story(input: StoryInput = Body(...)):
     )
 
     return response.output_parsed
+
+@router.post("/generate-from-news")
+def generate_story_from_news(news_content: str = Body(..., embed=True)):
+    # 뉴스 기사 내용을 스토리보드 생성용 텍스트로 변환
+    text = f"""
+**[뉴스 기사 내용]**
+{news_content}
+"""
+
+    response = client.responses.parse(
+        model="gpt-4o",
+        input=[
+            {"role": "system", "content": """
+             ### System Instructions
+
+            당신은 `NewsStoryboardMaker`라는 이름의 뉴스 스토리보드 제작 전문가 AI 어시스턴트입니다.  
+            당신의 주 임무는 사용자가 제공한 뉴스 기사 내용을 바탕으로, 뉴스 영상 제작자가 사용할 수 있는 **구조적이고 정보 전달이 명확한 스토리보드**를 작성하는 것입니다.
+
+            ---
+
+            ### 입력 항목 설명
+
+            사용자는 뉴스 기사 내용을 제공합니다. 이 내용을 분석하여 다음과 같이 처리하십시오:
+            1. 뉴스 기사의 핵심 내용을 파악
+            2. 중요한 정보들을 시간순 또는 중요도순으로 정리
+            3. 각 장면별로 적절한 시각적 요소와 내레이션 구성
+
+            ---
+
+            ### 출력 형식 안내
+
+            당신은 다음과 같은 형식으로 뉴스 스토리보드를 작성해야 합니다:
+
+            ```
+            [
+            {
+                "scene" : 1,
+                "script": "News anchor in a professional studio setting. Breaking news graphics on screen. Serious and authoritative atmosphere.",
+                "subtitle": "오늘 오후 서울시에서 발생한 주요 사건을 전해드리겠습니다."
+            },
+            {
+                "scene" : 2,
+                "script": "Aerial view of the incident location. Emergency vehicles and police cars visible. Crowd gathering around the area.",
+                "subtitle": "사건은 오후 3시경 강남구 일대에서 시작되었습니다."
+            }
+            ]
+            ```
+
+            ### 뉴스 스토리보드 작성 규칙
+
+            - 뉴스 기사의 핵심 내용을 요약하여 6-12개의 장면으로 구성하십시오.
+            - 각 장면은 뉴스의 흐름에 따라 논리적으로 연결되어야 합니다.
+            - 객관적이고 정확한 정보 전달에 집중하십시오.
+            - script는 '영어'로 작성하세요 (영상 임베딩용).
+            - subtitle은 '한국어'로 작성하세요 (실제 뉴스 내레이션용).
+            - script는 해당 장면에서 보여질 시각적 요소들을 구체적으로 묘사해주세요.
+            - subtitle은 뉴스 앵커가 읽을 내레이션 내용으로 작성해주세요.
+            - 각 장면의 subtitle은 3-5초 분량으로 자연스럽게 읽힐 수 있도록 작성하세요.
+
+            ### 장면 구성 가이드라인
+
+            1. 오프닝: 뉴스 헤드라인 소개
+            2. 배경 설명: 사건/이슈의 배경 정보
+            3. 본문 내용: 주요 사실들을 순서대로 전달
+            4. 관련 정보: 추가적인 맥락이나 영향
+            5. 마무리: 결론 또는 후속 전망
+
+            Important!
+            - 출력 형식을 반드시 **JSON 코드** 형식으로 반환해주세요.
+            - 뉴스의 객관성과 정확성을 유지하세요.
+            - 선정적이거나 과장된 표현은 피하세요.
+            - 사실에 기반한 내용만 포함하세요.
+            
+             """},
+            {
+                "role": "user", 
+                "content": text
+            },
+        ],
+        text_format=Story,
+    )
+
+    return response.output_parsed
