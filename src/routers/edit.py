@@ -46,7 +46,6 @@ class Scene(BaseModel):
     scene: int
     script: str
     subtitle: str
-    actor_name: Optional[str] = "현주"
 
 class StoryRequest(BaseModel):
     story: List[Scene]
@@ -56,7 +55,6 @@ class CustomScene(BaseModel):
     video_file_name: str  # 직접 지정할 비디오 파일명
     subtitle: str
     script: Optional[str] = None  # 선택적 스크립트 (기록용)
-    actor_name: Optional[str] = "현주"
 
 class CustomStoryRequest(BaseModel):
     story: List[CustomScene]
@@ -68,7 +66,6 @@ class FlexibleScene(BaseModel):
     video_file_name: Optional[str] = None  # 직접 파일명 지정
     script: Optional[str] = None  # 스크립트로 검색
     search_keywords: Optional[List[str]] = None  # 키워드 리스트로 검색
-    actor_name: Optional[str] = "현주"
     
 class FlexibleStoryRequest(BaseModel):
     story: List[FlexibleScene]
@@ -280,6 +277,7 @@ def _async_edit_video_mixed(
     filter_vertical: bool = False,
     max_search_results: int = 10,
     skip_unresolved: bool = False,
+    actor_name: Optional[str] = "현주",
     task_id: str = None
 ):
     """비동기 혼합 비디오 생성 처리 함수"""
@@ -292,6 +290,7 @@ def _async_edit_video_mixed(
             "filter_vertical": filter_vertical,
             "max_search_results": max_search_results,
             "skip_unresolved": skip_unresolved,
+            "actor_name": actor_name,
             "async_processing": True
         }
         
@@ -358,8 +357,7 @@ def _async_edit_video_mixed(
                 else:
                     raise Exception(f"Scene {scene.get('scene', i + 1)}: {str(e)}")
             
-            # TTS 생성
-            actor_name = scene.get("actor_name", "현주")
+            # TTS 생성 (전체 설정 actor_name 사용)
             audio_path = generate_typecast_tts_audio(scene["subtitle"], actor_name)
             
             # video_infos에 정보 추가
@@ -558,16 +556,19 @@ def edit_video_async(
       {
         "scene": 1,
         "script": "바다와 석양",
-        "subtitle": "AI가 선택한 바다 영상입니다.",
-        "actor_name": "현주"
+        "subtitle": "AI가 선택한 바다 영상입니다."
       },
       {
         "scene": 2,
         "video_file_name": "my_video.mp4",
-        "subtitle": "직접 지정한 영상입니다.",
-        "actor_name": "지윤"
+        "subtitle": "직접 지정한 영상입니다."
       }
     ]
+    ```
+    
+    **전체 비디오에 동일한 음성 배우 적용:**
+    ```
+    POST /api/ai/video_generate_mixed_async?actor_name=지윤&avoid_duplicates=true
     ```
     
     ## 응답 예시
@@ -586,6 +587,7 @@ def edit_video_async(
 )
 def edit_video_mixed_async(
     scenes: List[Union[Scene, CustomScene, FlexibleScene]],
+    actor_name: Optional[str] = Query("현주", description="TTS 음성 배우 이름"),
     avoid_duplicates: bool = Query(False, description="중복 영상 방지 여부"),
     filter_vertical: bool = Query(False, description="세로 영상 필터링 여부"),
     max_search_results: int = Query(10, description="최대 검색 결과 수", ge=1, le=50),
@@ -611,6 +613,7 @@ def edit_video_mixed_async(
         task_func=_async_edit_video_mixed,
         task_kwargs={
             "scenes_data": scenes_data,
+            "actor_name": actor_name,
             "avoid_duplicates": avoid_duplicates,
             "filter_vertical": filter_vertical,
             "max_search_results": max_search_results,
@@ -632,6 +635,7 @@ def edit_video_mixed_async(
         "status": TaskStatus.PENDING.value,
         "request_data": {"scenes": scenes_data},
         "options": {
+            "actor_name": actor_name,
             "avoid_duplicates": avoid_duplicates,
             "filter_vertical": filter_vertical,
             "max_search_results": max_search_results,
