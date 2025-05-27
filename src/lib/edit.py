@@ -194,9 +194,11 @@ def create_composite_video(video_infos: list[dict], output_path: str) -> str:
                     txt_clip = (
                         TextClip(
                             font="fonts/NotoSansKR-Medium.ttf",
-                            font_size=36,
+                            font_size=48,  # 36에서 48로 크기 증가
                             text=text,
                             color="white",
+                            stroke_color="black",  # 검정 테두리 추가
+                            stroke_width=3,  # 테두리 두께 설정
                             method='caption',
                             size=base_resolution  # 기준 해상도에 맞게 자막 크기 설정
                         )
