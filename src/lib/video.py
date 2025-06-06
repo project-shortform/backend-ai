@@ -2,7 +2,9 @@ import base64
 import cv2
 import requests
 import shutil
-from src.lib.llm import client
+import os
+from google.genai import types
+from src.lib.llm import gemini_client
 
 # Function to encode the image
 def encode_image(image_path):
@@ -59,7 +61,7 @@ def video_to_text(video_path, num_frames=3):
     """비디오의 주요 프레임들을 분석하여 텍스트 설명을 생성합니다.
 
     `extract_frames` 함수를 사용하여 비디오에서 프레임들을 추출하고,
-    OpenAI API를 호출하여 각 프레임에 대한 설명을 생성합니다.
+    Gemini API를 호출하여 각 프레임에 대한 설명을 생성합니다.
 
     Parameters
     ----------
@@ -74,21 +76,10 @@ def video_to_text(video_path, num_frames=3):
         생성된 비디오 설명 텍스트입니다.
     """
     frame_paths = extract_frames(video_path, num_frames)
-    images_content = []
-    for frame_path in frame_paths:
-        base64_image = encode_image(frame_path)
-        images_content.append(
-            {
-                "type": "input_image",
-                "image_url": f"data:image/jpeg;base64,{base64_image}",
-            }
-        )
-    # 첫 프레임에만 질문 텍스트 추가
-    content = (
-        [
-            {
-                "type": "input_text",
-                "text": """
+    
+    # 콘텐츠 파츠 준비
+    parts = [
+        types.Part.from_text(text="""
 You are a vision-to-text conversion expert trained to analyze key visual scenes and generate concise, descriptive English captions suitable for text embedding and video search.
 
 Your task is to receive 3 key video frames from a short background clip (less than 30 seconds) and generate a short, coherent English description for each frame. The descriptions should capture the essence of the visual scene, focusing on objects, actions, and setting.
@@ -101,23 +92,38 @@ Constraints:
 - Use consistent vocabulary to maximize embedding performance in search tasks.
 
 Your output will be used for semantic search and automatic storyboard narration in a YouTube video generation system.
-
-""",
-            }
-        ]
-        + images_content
+""")
+    ]
+    
+    # 각 프레임 이미지 추가
+    for frame_path in frame_paths:
+        base64_image = encode_image(frame_path)
+        parts.append(
+            types.Part.from_bytes(
+                data=base64.b64decode(base64_image),
+                mime_type="image/jpeg"
+            )
+        )
+    
+    contents = [
+        types.Content(
+            role="user",
+            parts=parts
+        )
+    ]
+    
+    generate_content_config = types.GenerateContentConfig(
+        response_mime_type="text/plain",
     )
-
-    response = client.responses.create(
-        model="gpt-4.1",
-        input=[
-            {
-                "role": "user",
-                "content": content,
-            }
-        ],
+    
+    # API 호출 및 응답 처리
+    response = gemini_client.models.generate_content(
+        model="gemini-2.5-flash-preview-05-20",
+        contents=contents,
+        config=generate_content_config,
     )
-    return response.output_text
+    
+    return response.text
 
 
 def download_video_from_url(url: str, save_path: str) -> str:

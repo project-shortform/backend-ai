@@ -96,9 +96,25 @@ if __name__ == "__main__":
                     "http://49.143.34.88:5000/api/video/upload_url?url=" + url
                 )
                 print("index: ", total_uploaded + i)
-                print(res.json())
+                print(f"응답 상태 코드: {res.status_code}")
+                
+                # 응답 상태 코드 확인
+                if res.status_code == 200:
+                    # 응답 내용이 JSON인지 확인
+                    try:
+                        response_json = res.json()
+                        print(response_json)
+                    except ValueError as json_error:
+                        print(f"JSON 파싱 오류: {json_error}")
+                        print(f"응답 내용: {res.text}")
+                else:
+                    print(f"서버 오류: {res.status_code}")
+                    print(f"응답 내용: {res.text}")
+                    
+            except requests.exceptions.RequestException as e:
+                print(f"네트워크 오류 발생: {e}")
             except Exception as e:
-                print(f"업로드 중 오류 발생: {e}")
+                print(f"기타 오류 발생: {e}")
             print("--------------------------------")
         total_uploaded += len(video_urls)
         page += 1
