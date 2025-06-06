@@ -2,10 +2,11 @@ import requests
 import urllib.parse
 import os
 from dotenv import load_dotenv
+import requests
 
 load_dotenv()
 
-def get_large_video_urls(search_term, per_page=20, page=1):
+def get_large_video_urls(search_term="", category="", video_type="film", per_page=20, page=1):
     """
     Pixabay API를 사용해서 검색 결과 중 large 사이즈 비디오 URL 리스트를 가져오는 함수
     
@@ -27,6 +28,8 @@ def get_large_video_urls(search_term, per_page=20, page=1):
     params = {
         'key': API_KEY,
         'q': encoded_search_term,
+        'category': category,
+        'video_type': video_type,
         'per_page': per_page,
         'page': page,
         'safesearch': 'true'  # 안전 검색 활성화
@@ -60,12 +63,12 @@ def get_large_video_urls(search_term, per_page=20, page=1):
 
 # 사용 예시
 if __name__ == "__main__":
-    # "yellow flowers" 검색 예시
-    search_keyword = ""
-    video_urls = get_large_video_urls(search_keyword, per_page=100)
+    video_urls = get_large_video_urls(per_page=100, page=2)
+    print(video_urls)
+    print("--------------------------------")
     
-    print(f"'{search_keyword}' 검색 결과 - large 비디오 URL 목록:")
     for i, url in enumerate(video_urls, 1):
-        print(f"{i}. {url}")
-    
-    print(f"\n총 {len(video_urls)}개의 비디오 URL을 찾았습니다.")
+        res = requests.post("http://49.143.34.88:5000/api/video/upload_url?url=" + url)
+        print("index: ", i)
+        print(res.json())
+        print("--------------------------------")
