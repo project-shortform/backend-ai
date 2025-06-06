@@ -147,6 +147,47 @@ def download_video_from_url(url: str, save_path: str) -> str:
     return save_path
 
 
+def create_thumbnail(video_path, thumbnail_path=None):
+    """비디오의 첫 번째 프레임을 썸네일로 추출합니다.
+
+    Parameters
+    ----------
+    video_path : str
+        썸네일을 추출할 비디오 파일의 경로입니다.
+    thumbnail_path : str, optional
+        썸네일을 저장할 경로입니다. None이면 자동 생성됩니다.
+
+    Returns
+    -------
+    str
+        저장된 썸네일 파일의 경로입니다.
+    """
+    vidcap = cv2.VideoCapture(video_path)
+    
+    # 첫 번째 프레임을 읽기
+    success, image = vidcap.read()
+    
+    if success:
+        if thumbnail_path is None:
+            # 비디오 파일명을 기반으로 썸네일 경로 생성
+            video_name = video_path.stem if hasattr(video_path, 'stem') else video_path.split('/')[-1].split('.')[0]
+            thumbnail_path = f"thumbnails/{video_name}_thumbnail.jpg"
+        
+        # 썸네일 크기 조정 (예: 320x240)
+        height, width = image.shape[:2]
+        aspect_ratio = width / height
+        new_width = 320
+        new_height = int(new_width / aspect_ratio)
+        resized_image = cv2.resize(image, (new_width, new_height))
+        
+        cv2.imwrite(thumbnail_path, resized_image)
+        vidcap.release()
+        return thumbnail_path
+    else:
+        vidcap.release()
+        raise Exception("비디오에서 프레임을 읽을 수 없습니다.")
+
+
 
 
 
