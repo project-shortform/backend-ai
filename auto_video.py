@@ -63,12 +63,26 @@ def get_large_video_urls(search_term="", category="", video_type="film", per_pag
 
 # 사용 예시
 if __name__ == "__main__":
-    video_urls = get_large_video_urls(per_page=100, page=2)
-    print(video_urls)
-    print("--------------------------------")
-    
-    for i, url in enumerate(video_urls, 1):
-        res = requests.post("http://49.143.34.88:5000/api/video/upload_url?url=" + url)
-        print("index: ", i)
-        print(res.json())
+    page = 1
+    total_uploaded = 0
+    while True:
+        print(f"현재 페이지: {page}")
+        video_urls = get_large_video_urls(per_page=100, page=page)
+        if not video_urls:
+            print("더 이상 비디오가 없습니다. 종료합니다.")
+            break
+        print(f"가져온 비디오 개수: {len(video_urls)}")
         print("--------------------------------")
+        for i, url in enumerate(video_urls, 1):
+            try:
+                res = requests.post("http://49.143.34.88:5000/api/video/upload_url?url=" + url)
+                print("index: ", total_uploaded + i)
+                print(res.json())
+            except Exception as e:
+                print(f"업로드 중 오류 발생: {e}")
+            print("--------------------------------")
+        total_uploaded += len(video_urls)
+        page += 1
+
+        # 너무 많은 요청을 방지하기 위해 잠깐 대기 (필요시)
+        # import time; time.sleep(1)
