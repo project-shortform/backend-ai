@@ -8,7 +8,7 @@ load_dotenv()
 
 def get_large_video_urls(search_term="", category="", video_type="film", per_page=20, page=1):
     """
-    Pixabay API를 사용해서 검색 결과 중 large 사이즈 비디오 URL 리스트를 가져오는 함수
+    Pixabay API를 사용해서 검색 결과 중 1920x1080 해상도 비디오 URL 리스트를 가져오는 함수
     
     Args:
         search_term (str): 검색할 키워드
@@ -16,7 +16,7 @@ def get_large_video_urls(search_term="", category="", video_type="film", per_pag
         page (int): 페이지 번호 (기본값: 1)
     
     Returns:
-        list: large 사이즈 비디오 URL 리스트
+        list: 1920x1080 해상도 비디오 URL 리스트
     """
     API_KEY = os.getenv("PIXABAY_API_KEY")
     BASE_URL = 'https://pixabay.com/api/videos/'
@@ -42,17 +42,24 @@ def get_large_video_urls(search_term="", category="", video_type="film", per_pag
         
         data = response.json()
         
-        # large 비디오 URL 리스트 추출
-        large_video_urls = []
+        # 1920x1080 해상도 비디오 URL 리스트 추출
+        hd_video_urls = []
         
         if 'hits' in data:
             for video in data['hits']:
-                if 'videos' in video and 'large' in video['videos']:
-                    large_url = video['videos']['large']['url']
-                    if large_url:  # URL이 비어있지 않은 경우만 추가
-                        large_video_urls.append(large_url)
+                if 'videos' in video:
+                    # 모든 비디오 품질 옵션을 확인 (large, medium, small, tiny)
+                    for quality in ['large', 'medium', 'small', 'tiny']:
+                        if quality in video['videos']:
+                            video_info = video['videos'][quality]
+                            # 1920x1080 해상도인지 확인
+                            if video_info.get('width') == 1920 and video_info.get('height') == 1080:
+                                url = video_info.get('url')
+                                if url:  # URL이 비어있지 않은 경우만 추가
+                                    hd_video_urls.append(url)
+                                    break  # 하나의 영상에서 1920x1080을 찾으면 다른 품질은 확인하지 않음
         
-        return large_video_urls
+        return hd_video_urls
         
     except requests.exceptions.RequestException as e:
         print(f"API 요청 오류: {e}")
@@ -68,6 +75,9 @@ if __name__ == "__main__":
     while True:
         print(f"현재 페이지: {page}")
         video_urls = get_large_video_urls(per_page=100, page=page)
+        
+        print(video_urls)
+        
         if not video_urls:
             print("더 이상 비디오가 없습니다. 종료합니다.")
             break
