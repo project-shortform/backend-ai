@@ -77,47 +77,80 @@ def get_large_video_urls(
 
 # 사용 예시
 if __name__ == "__main__":
-    page = 1
+    # 모든 카테고리 리스트
+    categories = [
+        "backgrounds", "fashion", "nature", "science", "education", 
+        "feelings", "health", "people", "religion", "places", 
+        "animals", "industry", "computer", "food", "sports", 
+        "transportation", "travel", "buildings", "business", "music"
+    ]
+    
+    # 시작할 카테고리 설정 (None이면 처음부터, 특정 카테고리명을 입력하면 해당 카테고리부터 시작)
+    start_category = "science"  # 예: "nature", "animals", "music" 등
+    
     total_uploaded = 0
-    while True:
-        print(f"현재 페이지: {page}")
-        video_urls = get_large_video_urls(per_page=100, page=page)
+    
+    # 시작 카테고리가 지정된 경우, 해당 카테고리부터 시작하도록 리스트 슬라이싱
+    if start_category:
+        if start_category in categories:
+            start_index = categories.index(start_category)
+            categories = categories[start_index:]
+            print(f"'{start_category}' 카테고리부터 시작합니다.")
+        else:
+            print(f"경고: '{start_category}' 카테고리를 찾을 수 없습니다. 처음부터 시작합니다.")
+            print(f"사용 가능한 카테고리: {', '.join(categories)}")
+    
+    for category in categories:
+        print(f"=== 카테고리: {category} ===")
+        page = 1  # 각 카테고리마다 페이지 1부터 시작
+        
+        while True:
+            print(f"현재 카테고리: {category}, 페이지: {page}")
+            video_urls = get_large_video_urls(category=category, per_page=100, page=page)
 
-        print(video_urls)
+            print(video_urls)
 
-        if not video_urls:
-            print("더 이상 비디오가 없습니다. 종료합니다.")
-            break
-        print(f"가져온 비디오 개수: {len(video_urls)}")
-        print("--------------------------------")
-        for i, url in enumerate(video_urls, 1):
-            try:
-                res = requests.post(
-                    "http://49.143.34.88:5000/api/video/upload_url?url=" + url
-                )
-                print("index: ", total_uploaded + i)
-                print(f"응답 상태 코드: {res.status_code}")
+            if not video_urls:
+                print(f"카테고리 '{category}'에서 더 이상 비디오가 없습니다. 다음 카테고리로 이동합니다.")
+                break
                 
-                # 응답 상태 코드 확인
-                if res.status_code == 200:
-                    # 응답 내용이 JSON인지 확인
-                    try:
-                        response_json = res.json()
-                        print(response_json)
-                    except ValueError as json_error:
-                        print(f"JSON 파싱 오류: {json_error}")
-                        print(f"응답 내용: {res.text}")
-                else:
-                    print(f"서버 오류: {res.status_code}")
-                    print(f"응답 내용: {res.text}")
-                    
-            except requests.exceptions.RequestException as e:
-                print(f"네트워크 오류 발생: {e}")
-            except Exception as e:
-                print(f"기타 오류 발생: {e}")
+            print(f"가져온 비디오 개수: {len(video_urls)}")
             print("--------------------------------")
-        total_uploaded += len(video_urls)
-        page += 1
+            
+            for i, url in enumerate(video_urls, 1):
+                try:
+                    res = requests.post(
+                        "http://49.143.34.88:5000/api/video/upload_url?url=" + url
+                    )
+                    print("index: ", total_uploaded + i)
+                    print(f"응답 상태 코드: {res.status_code}")
+                    
+                    # 응답 상태 코드 확인
+                    if res.status_code == 200:
+                        # 응답 내용이 JSON인지 확인
+                        try:
+                            response_json = res.json()
+                            print(response_json)
+                        except ValueError as json_error:
+                            print(f"JSON 파싱 오류: {json_error}")
+                            print(f"응답 내용: {res.text}")
+                    else:
+                        print(f"서버 오류: {res.status_code}")
+                        print(f"응답 내용: {res.text}")
+                        
+                except requests.exceptions.RequestException as e:
+                    print(f"네트워크 오류 발생: {e}")
+                except Exception as e:
+                    print(f"기타 오류 발생: {e}")
+                print("--------------------------------")
+                
+            total_uploaded += len(video_urls)
+            page += 1
+
+        print(f"카테고리 '{category}' 완료. 총 업로드된 비디오 수: {total_uploaded}")
+        print("=" * 50)
+
+    print(f"모든 카테고리 완료! 총 업로드된 비디오 수: {total_uploaded}")
 
         # 너무 많은 요청을 방지하기 위해 잠깐 대기 (필요시)
         # import time; time.sleep(1)
