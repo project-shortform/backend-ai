@@ -7,23 +7,22 @@ router = APIRouter(prefix="/api/story")
 
 # 입력 프롬프트 - Request body
 
-class Style(BaseModel):
-    category: str
-    concept: str
-    quantity: str
+class BasicInfo(BaseModel):
+    quantity: str      # 분량 (예: 15초, 30초, 1분, 3분, 5분)
+    age: str           # 연령대 (예: 10대, 20-30대, 노인 등)
 
-class Viewers(BaseModel):
-    sex: str
-    age: str
-    viewers_style: str
+class StyleInfo(BaseModel):
+    concept: str               # 스토리 컨셉 (예: 유머러스한, 감성적인, 신뢰감 있는 등)
+    concept_detail: str        # 구체적인 컨셉 요구사항
 
-class Info(BaseModel):
-    request_info: str
+class MaterialInfo(BaseModel):
+    material_type: str         # 자료 형태 (url, txt, pdf)
+    content: str               # 내용 (url 링크, 텍스트, pdf 파일명 등)
 
 class StoryInput(BaseModel):
-    style: Style
-    viewers: Viewers
-    info: Info
+    basic_info: BasicInfo
+    style_info: StyleInfo
+    material_info: MaterialInfo
 
 # 출력 프롬프트 - Response body
 
@@ -38,20 +37,18 @@ class Story(BaseModel):
 
 @router.post("/generate")
 def generate_story(input: StoryInput = Body(...)):
-    # JSON 입력을 텍스트 포맷으로 변환
     text = f"""
-**[영상 스타일 정보]**
-- 카테고리: {input.style.category}
-- 스토리 컨셉: {input.style.concept}
-- 분량: {input.style.quantity}
+**[영상 기본 정보]**    
+- 분량: {input.basic_info.quantity}
+- 연령대: {input.basic_info.age}
 
-**[영상 시청자 정보]**
-- 성별: {input.viewers.sex}
-- 연령대: {input.viewers.age}
-- 시청자 스타일: {input.viewers.viewers_style}
+**[영상 스타일]**  
+- 스토리 컨셉: {input.style_info.concept}
+- 구체적인 컨셉 요구사항: {input.style_info.concept_detail}
 
-**[상세 정보]**
-- 영상에 대한 추가 요구사항: {input.info.request_info}
+**[영상으로 만들 자료]**  
+- 자료 형태: {input.material_info.material_type}
+- 내용: {input.material_info.content}
 """
 
     response = client.responses.parse(
