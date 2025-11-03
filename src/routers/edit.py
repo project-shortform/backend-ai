@@ -488,15 +488,15 @@ def _async_edit_video_mixed(
       - 영상 검색 시 고려할 최대 결과 수
       - 예시: `?max_search_results=20`
     
-    - **background_music** (선택): 배경음악 파일 경로
-      - 음악 파일의 전체 경로 또는 상대 경로
+    - **background_music** (선택): 배경음악 파일명
+      - 음악 파일명만 입력 (music/ 디렉토리는 자동 추가)
       - 지원 형식: MP3, WAV, FLAC, AAC, OGG
-      - 예시: `?background_music=music/abc123_downloaded.mp3`
+      - 예시: `?background_music=abc123_downloaded.mp3`
       - 음악 파일은 `/api/music/upload_url`로 업로드 후 파일명 사용
     
     ## 전체 요청 예시
     ```bash
-    POST /api/ai/video_generate_async?voice=Aoede&avoid_duplicates=true&background_music=music/abc123_downloaded.mp3
+    POST /api/ai/video_generate_async?voice=Aoede&avoid_duplicates=true&background_music=abc123_downloaded.mp3
     
     Body:
     {
@@ -533,7 +533,7 @@ def _async_edit_video_mixed(
     ## 배경음악 사용 방법
     1. 음악 파일 업로드: `POST /api/music/upload_url?url=https://example.com/music.mp3`
     2. 응답에서 `file_name` 확인 (예: "abc123_downloaded.mp3")
-    3. 비디오 생성 시 파라미터로 전달: `?background_music=music/abc123_downloaded.mp3`
+    3. 비디오 생성 시 파라미터로 전달: `?background_music=abc123_downloaded.mp3`
     
     ## 주의사항
     - 배경음악은 TTS 음성과 자동으로 믹싱됩니다
@@ -549,9 +549,18 @@ def edit_video_async(
     avoid_duplicates: bool = Query(False, description="중복 영상 방지 여부"),
     filter_vertical: bool = Query(False, description="세로 영상 필터링 여부"),
     max_search_results: int = Query(10, description="최대 검색 결과 수", ge=1, le=50),
-    background_music: Optional[str] = Query(None, description="배경음악 파일 경로")
+    background_music: Optional[str] = Query(None, description="배경음악 파일명 (예: abc123_downloaded.mp3)")
 ):
     """비동기적으로 비디오를 생성합니다."""
+    
+    # 배경음악 파일 경로 처리
+    background_music_path = None
+    if background_music:
+        # 파일명만 제공된 경우 music/ 디렉토리 추가
+        if not background_music.startswith("music/"):
+            background_music_path = f"music/{background_music}"
+        else:
+            background_music_path = background_music
     
     # 태스크 큐 가져오기
     queue = get_task_queue()
@@ -565,7 +574,7 @@ def edit_video_async(
             "avoid_duplicates": avoid_duplicates,
             "filter_vertical": filter_vertical,
             "max_search_results": max_search_results,
-            "background_music_path": background_music,
+            "background_music_path": background_music_path,
             "task_id": None  # 나중에 설정됨
         },
         task_type="video_generation"
@@ -659,10 +668,10 @@ def edit_video_async(
       - true로 설정 시 문제가 있는 씬은 건너뛰고 계속 진행
       - 예시: `?skip_unresolved=true`
     
-    - **background_music** (선택): 배경음악 파일 경로
-      - 음악 파일의 전체 경로 또는 상대 경로
+    - **background_music** (선택): 배경음악 파일명
+      - 음악 파일명만 입력 (music/ 디렉토리는 자동 추가)
       - 지원 형식: MP3, WAV, FLAC, AAC, OGG
-      - 예시: `?background_music=music/abc123_downloaded.mp3`
+      - 예시: `?background_music=abc123_downloaded.mp3`
       - 음악 파일은 `/api/music/upload_url`로 업로드 후 파일명 사용
     
     ## 씬 타입 설명
@@ -700,7 +709,7 @@ def edit_video_async(
     
     ## 전체 요청 예시
     ```bash
-    POST /api/ai/video_generate_mixed_async?voice=Aoede&avoid_duplicates=true&background_music=music/abc123_downloaded.mp3
+    POST /api/ai/video_generate_mixed_async?voice=Aoede&avoid_duplicates=true&background_music=abc123_downloaded.mp3
     
     Body:
     [
@@ -737,7 +746,7 @@ def edit_video_async(
     ## 배경음악 사용 방법
     1. 음악 파일 업로드: `POST /api/music/upload_url?url=https://example.com/music.mp3`
     2. 응답에서 `file_name` 확인 (예: "abc123_downloaded.mp3")
-    3. 비디오 생성 시 파라미터로 전달: `?background_music=music/abc123_downloaded.mp3`
+    3. 비디오 생성 시 파라미터로 전달: `?background_music=abc123_downloaded.mp3`
     
     ## 주의사항
     - 배경음악은 TTS 음성과 자동으로 믹싱됩니다
@@ -754,9 +763,18 @@ def edit_video_mixed_async(
     filter_vertical: bool = Query(False, description="세로 영상 필터링 여부"),
     max_search_results: int = Query(10, description="최대 검색 결과 수", ge=1, le=50),
     skip_unresolved: bool = Query(False, description="해결되지 않는 씬 건너뛰기"),
-    background_music: Optional[str] = Query(None, description="배경음악 파일 경로")
+    background_music: Optional[str] = Query(None, description="배경음악 파일명 (예: abc123_downloaded.mp3)")
 ):
     """비동기적으로 혼합 비디오를 생성합니다."""
+    
+    # 배경음악 파일 경로 처리
+    background_music_path = None
+    if background_music:
+        # 파일명만 제공된 경우 music/ 디렉토리 추가
+        if not background_music.startswith("music/"):
+            background_music_path = f"music/{background_music}"
+        else:
+            background_music_path = background_music
     
     # 씬 데이터를 딕셔너리로 변환
     scenes_data = []
@@ -781,7 +799,7 @@ def edit_video_mixed_async(
             "filter_vertical": filter_vertical,
             "max_search_results": max_search_results,
             "skip_unresolved": skip_unresolved,
-            "background_music_path": background_music,
+            "background_music_path": background_music_path,
             "task_id": None  # 나중에 설정됨
         },
         task_type="mixed_video_generation"
