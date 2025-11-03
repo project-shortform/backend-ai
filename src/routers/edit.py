@@ -31,7 +31,7 @@ from fastapi import APIRouter, Body, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Optional, Union
 from src.lib.embedding import search_chroma
-from src.lib.tts import generate_typecast_tts_audio
+from src.lib.tts import generate_gemini_tts_audio
 from src.lib.edit import create_composite_video, cleanup_video_resources
 from src.db import save_video_generation_info, get_video_generation_history, get_video_generation_by_id
 from src.db import save_task_info, update_task_info, get_task_info, get_all_tasks, delete_task_info  # 태스크 DB 함수들
@@ -206,7 +206,7 @@ def _async_edit_video(
 
             # subtitle을 TTS로 변환
             print(f"🎤 TTS 음성: {voice}")
-            audio_path = generate_typecast_tts_audio(scene["subtitle"], voice)
+            audio_path = generate_gemini_tts_audio(scene["subtitle"], voice)
 
             # video_infos에 정보 추가
             video_infos.append({
@@ -360,7 +360,7 @@ def _async_edit_video_mixed(
                     raise Exception(f"Scene {scene.get('scene', i + 1)}: {str(e)}")
             
             # TTS 생성 (전체 설정 voice 사용)
-            audio_path = generate_typecast_tts_audio(scene["subtitle"], voice)
+            audio_path = generate_gemini_tts_audio(scene["subtitle"], voice)
             
             # video_infos에 정보 추가
             video_infos.append({
