@@ -86,7 +86,7 @@ if __name__ == "__main__":
     ]
     
     # 시작할 카테고리 설정 (None이면 처음부터, 특정 카테고리명을 입력하면 해당 카테고리부터 시작)
-    start_category = "science"  # 예: "nature", "animals", "music" 등
+    start_category = "education"  # 예: "nature", "animals", "music" 등
     
     total_uploaded = 0
     

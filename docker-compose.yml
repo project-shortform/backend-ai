@@ -3,9 +3,21 @@ version: '3.8'
 services:
   caddy:
     image: caddy:latest
+    container_name: caddy-proxy
     ports:
       - "80:80"
       - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
     extra_hosts:
+      # Docker 컨테이너에서 호스트 머신 접근
       - "host.docker.internal:host-gateway"
+    restart: unless-stopped
 
+volumes:
+  caddy_data:
+  caddy_config:
+  caddy_logs:

@@ -7,30 +7,37 @@ router = APIRouter(prefix="/api/story")
 
 # 입력 프롬프트 - Request body
 
+
 class BasicInfo(BaseModel):
-    quantity: str      # 분량 (예: 15초, 30초, 1분, 3분, 5분)
-    age: str           # 연령대 (예: 10대, 20-30대, 노인 등)
+    quantity: str  # 분량 (예: 15초, 30초, 1분, 3분, 5분)
+    age: str  # 연령대 (예: 10대, 20-30대, 노인 등)
+
 
 class StyleInfo(BaseModel):
-    concept: str               # 스토리 컨셉 (예: 유머러스한, 감성적인, 신뢰감 있는 등)
-    concept_detail: str        # 구체적인 컨셉 요구사항
+    concept: str  # 스토리 컨셉 (예: 유머러스한, 감성적인, 신뢰감 있는 등)
+    concept_detail: str  # 구체적인 컨셉 요구사항
+
 
 class MaterialInfo(BaseModel):
-    material_type: str         # 자료 형태 (url, txt, pdf)
-    content: str               # 내용 (url 링크, 텍스트, pdf 파일명 등)
+    material_type: str  # 자료 형태 (url, txt, pdf)
+    content: str  # 내용 (url 링크, 텍스트, pdf 파일명 등)
+
 
 class StoryInput(BaseModel):
     basic_info: BasicInfo
     style_info: StyleInfo
     material_info: MaterialInfo
 
+
 # 출력 프롬프트 - Response body
+
 
 class Scene(BaseModel):
     scene: int
     script_eng: str
     script_ko: str
     subtitle: str
+
 
 class Story(BaseModel):
     story: list[Scene]
@@ -52,10 +59,14 @@ def generate_story(input: StoryInput = Body(...)):
 - 내용: {input.material_info.content}
 """
 
+    print("스토리 제작 시작...")
+
     response = client.responses.parse(
-        model="gpt-4.1",
+        model="gpt-5",
         input=[
-            {"role": "system", "content": """
+            {
+                "role": "system",
+                "content": """
             # System Instructions
 
             You are a storyboard creation expert AI assistant named `StoryboardMaker`.  
@@ -151,16 +162,17 @@ def generate_story(input: StoryInput = Body(...)):
             - Always return the output in **JSON code** format.
             - Never leave any scene content (script, subtitle) blank.
             
-             """},
-            {
-                "role": "user", 
-                "content": text
+             """,
             },
+            {"role": "user", "content": text},
         ],
         text_format=Story,
+        reasoning={"effort": "low"},
+        text={"verbosity": "low"},
     )
 
     return response.output_parsed
+
 
 # @router.post("/generate-from-news")
 # def generate_story_from_news(news_content: str = Body(..., embed=True)):
@@ -176,7 +188,7 @@ def generate_story(input: StoryInput = Body(...)):
 #             {"role": "system", "content": """
 #              ### System Instructions
 
-#             당신은 `NewsStoryboardMaker`라는 이름의 뉴스 스토리보드 제작 전문가 AI 어시스턴트입니다.  
+#             당신은 `NewsStoryboardMaker`라는 이름의 뉴스 스토리보드 제작 전문가 AI 어시스턴트입니다.
 #             당신의 주 임무는 사용자가 제공한 뉴스 기사 내용을 바탕으로, 뉴스 영상 제작자가 사용할 수 있는 **구조적이고 정보 전달이 명확한 스토리보드**를 작성하는 것입니다.
 
 #             ---
@@ -233,10 +245,10 @@ def generate_story(input: StoryInput = Body(...)):
 #             - 뉴스의 객관성과 정확성을 유지하세요.
 #             - 선정적이거나 과장된 표현은 피하세요.
 #             - 사실에 기반한 내용만 포함하세요.
-            
+
 #              """},
 #             {
-#                 "role": "user", 
+#                 "role": "user",
 #                 "content": text
 #             },
 #         ],

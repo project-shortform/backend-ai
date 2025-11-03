@@ -1,0 +1,57 @@
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# 환경변수
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 프론트엔드 (사용하지 않음)
+frontend/
+
+# 대용량 출력 파일들 (볼륨으로 마운트됨)
+output/*.mp4
+uploads/
+thumbnails/
+audios/
+frames/
+
+# 임시 파일
+temp/
+temp_video_processing/
+*.tmp
+*.log
+
+# 테스트
+test.py
+*.test.py
+
+# 문서
+README.md
+*.md
+
+# 기타
+.DS_Store
+*.stackdump
+
