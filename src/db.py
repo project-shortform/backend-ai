@@ -251,7 +251,10 @@ def save_music_url(url: str, file_name: str, metadata: dict = None):
         "metadata": metadata or {},
     }
 
-    return music_url_db.insert(record)
+    with _db_lock:
+        record_id = music_url_db.insert(record)
+        print(f"🔍 [DB] 음악 URL 저장됨 - ID: {record_id}, URL: {url}, 파일: {file_name}")
+        return record_id
 
 
 def check_music_url_exists(url: str):
@@ -265,7 +268,11 @@ def check_music_url_exists(url: str):
         dict: 기존 레코드 정보 또는 None
     """
     UrlQuery = Query()
-    return music_url_db.get(UrlQuery.url == url)
+    with _db_lock:
+        result = music_url_db.get(UrlQuery.url == url)
+        if result:
+            print(f"🔍 [DB] 중복 음악 URL 발견 - URL: {url}, 파일: {result.get('file_name')}")
+        return result
 
 
 def get_all_music_urls():
@@ -275,7 +282,10 @@ def get_all_music_urls():
     Returns:
         list: 음악 URL 정보 리스트
     """
-    return music_url_db.all()
+    with _db_lock:
+        result = music_url_db.all()
+        print(f"🔍 [DB] 음악 URL 목록 조회 - 총 {len(result)}개")
+        return result
 
 
 def delete_music_url(url: str):
@@ -289,5 +299,8 @@ def delete_music_url(url: str):
         bool: 삭제 성공 여부
     """
     UrlQuery = Query()
-    result = music_url_db.remove(UrlQuery.url == url)
-    return len(result) > 0
+    with _db_lock:
+        result = music_url_db.remove(UrlQuery.url == url)
+        if len(result) > 0:
+            print(f"🔍 [DB] 음악 URL 삭제됨 - URL: {url}")
+        return len(result) > 0
