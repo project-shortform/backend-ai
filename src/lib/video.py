@@ -126,6 +126,126 @@ Your output will be used for semantic search and automatic storyboard narration 
     return response.text
 
 
+def music_to_text(music_path):
+    """음악 파일을 분석하여 텍스트 설명을 생성합니다.
+
+    Gemini API를 호출하여 음악의 특징과 분위기를 분석하고 설명을 생성합니다.
+
+    Parameters
+    ----------
+    music_path : str
+        텍스트 설명을 생성할 음악 파일의 경로입니다.
+
+    Returns
+    -------
+    str
+        생성된 음악 설명 텍스트입니다.
+    """
+    # 파일명에서 기본 정보 추출
+    file_name = os.path.basename(music_path)
+    name_without_ext = os.path.splitext(file_name)[0]
+    
+    # UUID 제거
+    if "_" in name_without_ext:
+        parts = name_without_ext.split("_", 1)
+        if len(parts) > 1 and len(parts[0]) == 32:  # UUID 길이 확인
+            name_without_ext = parts[1]
+    
+    # 음악 파일 정보 추출
+    duration = get_audio_duration(music_path)
+    
+    # 음악 파일을 바이너리로 읽기
+    try:
+        with open(music_path, "rb") as audio_file:
+            audio_data = audio_file.read()
+    except Exception as e:
+        print(f"음악 파일 읽기 실패: {music_path} - {e}")
+        return f"음악 파일: {name_without_ext}"
+    
+    # MIME 타입 결정
+    mime_type = "audio/mpeg"
+    if music_path.lower().endswith('.wav'):
+        mime_type = "audio/wav"
+    elif music_path.lower().endswith('.flac'):
+        mime_type = "audio/flac"
+    elif music_path.lower().endswith('.aac'):
+        mime_type = "audio/aac"
+    elif music_path.lower().endswith('.ogg'):
+        mime_type = "audio/ogg"
+    
+    # 콘텐츠 파츠 준비
+    contents = [
+        types.Content(
+            role="user",
+            parts=[
+                types.Part.from_text(text=f"""
+You are an audio analysis expert trained to analyze music files and generate descriptive English text suitable for text embedding and music search.
+
+Your task is to analyze a music file and generate a comprehensive description that captures its musical characteristics, mood, and potential use cases.
+
+File Information:
+- File Name: {name_without_ext}
+- Duration: {duration:.1f} seconds
+
+Please analyze the music and provide a description that includes:
+1. Musical genre and style
+2. Mood and emotional tone
+3. Instrumentation (if identifiable)
+4. Tempo and rhythm characteristics
+5. Potential use cases (e.g., background music, video editing, presentation)
+
+Constraints:
+- Output must be in English only.
+- Be descriptive but concise (under 100 words).
+- Focus on objective musical characteristics.
+- Include potential use cases for video production.
+- Use consistent vocabulary to maximize embedding performance in search tasks.
+
+Your output will be used for semantic search and automatic music selection in a video generation system.
+"""),
+                types.Part.from_bytes(
+                    data=audio_data,
+                    mime_type=mime_type
+                )
+            ]
+        )
+    ]
+    
+    generate_content_config = types.GenerateContentConfig(
+        response_mime_type="text/plain",
+    )
+    
+    # API 호출 및 응답 처리
+    try:
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash-preview-05-20",
+            contents=contents,
+            config=generate_content_config,
+        )
+        return response.text
+    except Exception as e:
+        print(f"Gemini API 호출 실패: {e}")
+        return f"음악 파일: {name_without_ext} (재생시간: {duration:.1f}초)"
+
+
+def get_audio_duration(file_path):
+    """오디오 파일의 재생 시간을 가져옵니다."""
+    try:
+        import subprocess
+        cmd = [
+            "ffprobe",
+            "-v", "quiet",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            file_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return float(result.stdout.strip())
+    except Exception as e:
+        print(f"오디오 길이 가져오기 실패: {file_path} - {e}")
+        return 0.0
+
+
 def download_video_from_url(url: str, save_path: str) -> str:
     """주어진 URL에서 비디오 파일을 다운로드하여 지정된 경로에 저장합니다.
 

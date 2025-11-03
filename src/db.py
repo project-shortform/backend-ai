@@ -16,6 +16,7 @@ _db_lock = threading.Lock()
 video_db = TinyDB("db/videos.json", storage=CachingMiddleware(JSONStorage))
 task_db = TinyDB("db/tasks.json", storage=CachingMiddleware(JSONStorage))
 video_url_db = TinyDB("db/video_urls.json", storage=CachingMiddleware(JSONStorage))
+music_url_db = TinyDB("db/music_urls.json", storage=CachingMiddleware(JSONStorage))
 
 
 def save_video_generation_info(
@@ -225,4 +226,68 @@ def delete_video_url(url: str):
     """
     UrlQuery = Query()
     result = video_url_db.remove(UrlQuery.url == url)
+    return len(result) > 0
+
+
+# === 음악 URL 관리 함수들 ===
+
+
+def save_music_url(url: str, file_name: str, metadata: dict = None):
+    """
+    음악 URL 정보를 DB에 저장합니다.
+
+    Args:
+        url (str): 음악 URL
+        file_name (str): 저장된 파일명
+        metadata (dict, optional): 추가 메타데이터
+
+    Returns:
+        int: 저장된 레코드의 ID
+    """
+    record = {
+        "url": url,
+        "file_name": file_name,
+        "created_at": datetime.now().isoformat(),
+        "metadata": metadata or {},
+    }
+
+    return music_url_db.insert(record)
+
+
+def check_music_url_exists(url: str):
+    """
+    음악 URL이 이미 존재하는지 확인합니다.
+
+    Args:
+        url (str): 확인할 URL
+
+    Returns:
+        dict: 기존 레코드 정보 또는 None
+    """
+    UrlQuery = Query()
+    return music_url_db.get(UrlQuery.url == url)
+
+
+def get_all_music_urls():
+    """
+    저장된 모든 음악 URL 정보를 가져옵니다.
+
+    Returns:
+        list: 음악 URL 정보 리스트
+    """
+    return music_url_db.all()
+
+
+def delete_music_url(url: str):
+    """
+    음악 URL 정보를 삭제합니다.
+
+    Args:
+        url (str): 삭제할 URL
+
+    Returns:
+        bool: 삭제 성공 여부
+    """
+    UrlQuery = Query()
+    result = music_url_db.remove(UrlQuery.url == url)
     return len(result) > 0

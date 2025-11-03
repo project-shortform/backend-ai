@@ -390,7 +390,7 @@ def process_single_clip(info, temp_dir, base_resolution=(1920, 1080)):
 
 
 def create_composite_video(
-    video_infos: list[dict], output_path: str, progress_callback=None
+    video_infos: list[dict], output_path: str, progress_callback=None, background_music_path: str = None
 ) -> str:
     """
     비디오 클립들과 오디오를 합성하여 하나의 영상을 만듭니다.
@@ -409,6 +409,8 @@ def create_composite_video(
         결과 비디오를 저장할 경로
     progress_callback : callable, optional
         진행 상황을 업데이트할 콜백 함수 (progress, step_detail)
+    background_music_path : str, optional
+        배경음악 파일 경로
 
     Returns
     -------
@@ -494,26 +496,43 @@ def create_composite_video(
             "0",
             "-i",
             concat_file,
-            "-c:v",
-            "libx264",
-            "-c:a",
-            "aac",
-            "-preset",
-            "fast",
-            "-crf",
-            "23",
-            "-r",
-            "24",  # 24fps 설정
-            "-vsync",
-            "cfr",  # 일정한 프레임레이트 강제
-            "-async",
-            "1",  # 오디오 동기화
-            "-avoid_negative_ts",
-            "make_zero",  # 타임스탬프 문제 방지
-            "-fflags",
-            "+genpts",  # PTS 생성
-            output_path,
+            # 배경음악이 있는 경우 추가
         ]
+        
+        # 배경음악 입력 추가
+        if background_music_path and os.path.exists(background_music_path):
+            cmd.extend([
+                "-i", background_music_path,
+                # 필터 맵 설정: 비디오 트랙 0, 배경음악 트랙 1
+                "-filter_complex", "[0:v:0] [1:a:0][2:a:0]amix=inputs=2[vout]",
+                "-map", "[vout]",
+                "-map", "[aout]"
+            ])
+            print(f"🎵 배경음악 추가: {background_music_path}")
+        else:
+            # 배경음악이 없는 경우 기존 방식 사용
+            cmd.extend([
+                "-c:v",
+                "libx264",
+                "-c:a",
+                "aac",
+                "-preset",
+                "fast",
+                "-crf",
+                "23",
+                "-r",
+                "24",  # 24fps 설정
+                "-vsync",
+                "cfr",  # 일정한 프레임레이트 강제
+                "-async",
+                "1",  # 오디오 동기화
+                "-avoid_negative_ts",
+                "make_zero",  # 타임스탬프 문제 방지
+                "-fflags",
+                "+genpts",  # PTS 생성
+            ])
+        
+        cmd.extend([output_path])
 
         run_ffmpeg_command(cmd)
 

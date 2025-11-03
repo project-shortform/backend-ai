@@ -16,6 +16,12 @@ video_collection = chroma_client.get_or_create_collection(
     metadata={"hnsw:space": "cosine"}
 )
 
+# 음악 전용 컬렉션
+music_collection = chroma_client.get_or_create_collection(
+    name="music", 
+    metadata={"hnsw:space": "cosine"}
+)
+
 # 환경 변수 로드
 load_dotenv()
 
@@ -86,6 +92,29 @@ def add_to_chroma(text: str, metadata: dict):
     return ids  # 생성된 ID 반환 (필요시 활용 가능)
 
 
+def add_to_chroma_music(text: str, metadata: dict):
+    """
+    텍스트와 메타데이터를 음악 전용 Chroma DB에 추가합니다.
+
+    Args:
+        text (str): 저장할 텍스트
+        metadata (dict): 메타데이터
+
+    Returns:
+        list: 생성된 ID 리스트
+    """
+    # UUID를 사용하여 고유 ID 생성
+    ids = [str(uuid.uuid4())]
+
+    embeddings = get_embeddings([text])
+
+    music_collection.add(
+        ids=ids, embeddings=embeddings, documents=[text], metadatas=[metadata]
+    )
+
+    return ids  # 생성된 ID 반환 (필요시 활용 가능)
+
+
 def search_chroma(text: str, n_results: int = 10):
     """
     Chroma DB에서 텍스트를 검색합니다.
@@ -105,6 +134,31 @@ def search_chroma(text: str, n_results: int = 10):
         - 1.0 ~ 2.0: 다름
     """
     results = video_collection.query(
+        query_embeddings=get_embeddings([text]), n_results=n_results
+    )
+
+    return results
+
+
+def search_chroma_music(text: str, n_results: int = 10):
+    """
+    음악 전용 Chroma DB에서 텍스트를 검색합니다.
+
+    Args:
+        query (str): 검색할 쿼리 텍스트
+        n_results (int): 검색 결과 수 (기본값: 10)
+
+    Returns:
+        list: 검색 결과 리스트
+        
+    Note:
+        코사인 거리 해석:
+        - 0.0 ~ 0.2: 매우 유사함
+        - 0.2 ~ 0.5: 유사함  
+        - 0.5 ~ 1.0: 보통
+        - 1.0 ~ 2.0: 다름
+    """
+    results = music_collection.query(
         query_embeddings=get_embeddings([text]), n_results=n_results
     )
 

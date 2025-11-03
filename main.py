@@ -2,7 +2,7 @@ from fastapi import FastAPI
 import uvicorn
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from src.routers import video, story, edit, tts_service
+from src.routers import video, story, edit, tts_service, music
 from src.task_queue import get_task_queue
 
 app = FastAPI(
@@ -25,11 +25,13 @@ app.include_router(video.router)
 app.include_router(story.router)
 app.include_router(edit.router)
 app.include_router(tts_service.router)
+app.include_router(music.router)
 
 # 스태틱 파일 서빙
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.mount("/output", StaticFiles(directory="output"), name="output")
 app.mount("/thumbnails", StaticFiles(directory="thumbnails"), name="thumbnails")
+app.mount("/music", StaticFiles(directory="music"), name="music")
 
 
 @app.on_event("startup")

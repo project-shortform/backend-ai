@@ -128,14 +128,14 @@ def parse_audio_mime_type(mime_type: str) -> dict[str, int]:
 
 def generate_gemini_tts_audio(
     text: str,
-    voice_name: str = "Zephyr",
+    voice: str = "Zephyr",
 ) -> str:
     """
     Google Gemini 2.5 Flash TTS를 사용하여 텍스트를 음성으로 변환하고 /audios 폴더에 UUID 기반 파일로 저장.
 
     Args:
         text (str): 음성으로 변환할 텍스트
-        voice_name (str): Gemini TTS 보이스 이름 (Zephyr, Charon, Kore, Fenrir, Aoede, Puck 등)
+        voice (str): Gemini TTS 보이스 이름 (Zephyr, Charon, Kore, Fenrir, Aoede, Puck 등)
 
     Returns:
         str: 저장된 오디오 파일의 경로
@@ -172,7 +172,7 @@ def generate_gemini_tts_audio(
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name=voice_name
+                        voice_name=voice
                     )
                 )
             ),
@@ -221,31 +221,3 @@ def generate_gemini_tts_audio(
     except Exception as e:
         raise Exception(f"Gemini TTS 생성 실패: {str(e)}")
 
-
-# 기존 함수와의 호환성을 위한 별칭 함수
-def generate_typecast_tts_audio(
-    text: str,
-    actor_name: str = "Zephyr",
-    emotion_tone_preset: str = "normal-1",
-    audio_format: str = "wav",
-    tempo: float = 1.0,
-    volume: int = 100,
-    pitch: int = 0,
-) -> str:
-    """
-    기존 Typecast API 호환성을 위한 래퍼 함수.
-    실제로는 Gemini TTS를 사용합니다.
-
-    Args:
-        text (str): 음성으로 변환할 텍스트
-        actor_name (str): Gemini TTS 보이스 이름 (기존 파라미터와 호환)
-        emotion_tone_preset (str): 미사용 (호환성용)
-        audio_format (str): 미사용 (호환성용)
-        tempo (float): 미사용 (호환성용)
-        volume (int): 미사용 (호환성용)
-        pitch (int): 미사용 (호환성용)
-
-    Returns:
-        str: 저장된 오디오 파일의 경로
-    """
-    return generate_gemini_tts_audio(text, actor_name)
