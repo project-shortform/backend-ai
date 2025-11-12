@@ -390,7 +390,12 @@ def process_single_clip(info, temp_dir, base_resolution=(1920, 1080)):
 
 
 def create_composite_video(
-    video_infos: list[dict], output_path: str, progress_callback=None, background_music_path: str = None
+    video_infos: list[dict],
+    output_path: str,
+    progress_callback=None,
+    background_music_path: str = None,
+    tts_volume: float = 1.0,
+    background_music_volume: float = 0.2,
 ) -> str:
     """
     비디오 클립들과 오디오를 합성하여 하나의 영상을 만듭니다.
@@ -411,6 +416,10 @@ def create_composite_video(
         진행 상황을 업데이트할 콜백 함수 (progress, step_detail)
     background_music_path : str, optional
         배경음악 파일 경로
+    tts_volume : float, optional
+        TTS 음성 볼륨 (0.0-2.0, 기본값: 1.0)
+    background_music_volume : float, optional
+        배경음악 볼륨 (0.0-1.0, 기본값: 0.2)
 
     Returns
     -------
@@ -498,40 +507,71 @@ def create_composite_video(
             concat_file,
             # 배경음악이 있는 경우 추가
         ]
-        
+
         # 배경음악 입력 추가
         if background_music_path and os.path.exists(background_music_path):
-            cmd.extend([
-                "-i", background_music_path,
-                # 필터 맵 설정: 비디오 트랙 0, 배경음악 트랙 1
-                "-filter_complex", "[0:v:0] [1:a:0][2:a:0]amix=inputs=2[vout]",
-                "-map", "[vout]",
-                "-map", "[aout]"
-            ])
-            print(f"🎵 배경음악 추가: {background_music_path}")
+            # 볼륨 필터 생성
+            volume_filter = f"[0:a]volume={tts_volume}[a0];[1:a]volume={background_music_volume}[a1];[a0][a1]amix=inputs=2:duration=first[aout]"
+
+            cmd.extend(
+                [
+                    "-i",
+                    background_music_path,
+                    # 필터 설정: TTS 음성과 배경음악 볼륨 조절 후 믹스
+                    "-filter_complex",
+                    volume_filter,
+                    "-map",
+                    "0:v",  # 비디오는 concat 파일에서
+                    "-map",
+                    "[aout]",  # 오디오는 믹스된 결과
+                    "-c:v",
+                    "libx264",
+                    "-c:a",
+                    "aac",
+                    "-preset",
+                    "fast",
+                    "-crf",
+                    "23",
+                    "-r",
+                    "24",  # 24fps 설정
+                    "-vsync",
+                    "cfr",  # 일정한 프레임레이트 강제
+                    "-async",
+                    "1",  # 오디오 동기화
+                    "-avoid_negative_ts",
+                    "make_zero",  # 타임스탬프 문제 방지
+                    "-fflags",
+                    "+genpts",  # PTS 생성
+                ]
+            )
+            print(
+                f"🎵 배경음악 추가 (TTS: {tts_volume*100:.0f}%, 배경음악: {background_music_volume*100:.0f}%): {background_music_path}"
+            )
         else:
             # 배경음악이 없는 경우 기존 방식 사용
-            cmd.extend([
-                "-c:v",
-                "libx264",
-                "-c:a",
-                "aac",
-                "-preset",
-                "fast",
-                "-crf",
-                "23",
-                "-r",
-                "24",  # 24fps 설정
-                "-vsync",
-                "cfr",  # 일정한 프레임레이트 강제
-                "-async",
-                "1",  # 오디오 동기화
-                "-avoid_negative_ts",
-                "make_zero",  # 타임스탬프 문제 방지
-                "-fflags",
-                "+genpts",  # PTS 생성
-            ])
-        
+            cmd.extend(
+                [
+                    "-c:v",
+                    "libx264",
+                    "-c:a",
+                    "aac",
+                    "-preset",
+                    "fast",
+                    "-crf",
+                    "23",
+                    "-r",
+                    "24",  # 24fps 설정
+                    "-vsync",
+                    "cfr",  # 일정한 프레임레이트 강제
+                    "-async",
+                    "1",  # 오디오 동기화
+                    "-avoid_negative_ts",
+                    "make_zero",  # 타임스탬프 문제 방지
+                    "-fflags",
+                    "+genpts",  # PTS 생성
+                ]
+            )
+
         cmd.extend([output_path])
 
         run_ffmpeg_command(cmd)

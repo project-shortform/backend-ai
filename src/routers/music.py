@@ -13,7 +13,7 @@ from src.db import save_music_url, check_music_url_exists, get_all_music_urls, d
 
 router = APIRouter(
     prefix="/api/music",
-    tags=["음악 관리"],
+    tags=["Music Management"],
     responses={404: {"description": "Not found"}}
 )
 

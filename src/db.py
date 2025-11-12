@@ -1,8 +1,5 @@
 from tinydb import TinyDB, Query
-from tinydb.middlewares import CachingMiddleware
-from tinydb.storages import JSONStorage
 import os
-import json
 import threading
 from datetime import datetime
 
@@ -12,11 +9,12 @@ os.makedirs("db", exist_ok=True)
 # 스레드 안전성을 위한 잠금
 _db_lock = threading.Lock()
 
-# TinyDB 인스턴스 생성 (CachingMiddleware로 동시성 문제 완화)
-video_db = TinyDB("db/videos.json", storage=CachingMiddleware(JSONStorage))
-task_db = TinyDB("db/tasks.json", storage=CachingMiddleware(JSONStorage))
-video_url_db = TinyDB("db/video_urls.json", storage=CachingMiddleware(JSONStorage))
-music_url_db = TinyDB("db/music_urls.json", storage=CachingMiddleware(JSONStorage))
+# TinyDB 인스턴스 생성
+# 기본 JSONStorage는 각 작업 후 자동으로 디스크에 기록됨
+video_db = TinyDB("db/videos.json")
+task_db = TinyDB("db/tasks.json")
+video_url_db = TinyDB("db/video_urls.json")
+music_url_db = TinyDB("db/music_urls.json")
 
 
 def save_video_generation_info(
@@ -42,7 +40,10 @@ def save_video_generation_info(
         "generation_options": generation_options,  # 생성 옵션들 저장
     }
 
-    return video_db.insert(record)
+    with _db_lock:
+        record_id = video_db.insert(record)
+        print(f"💾 [DB] 비디오 생성 정보 저장됨 - ID: {record_id}, 경로: {output_path}")
+        return record_id
 
 
 def get_video_generation_history():
@@ -52,7 +53,8 @@ def get_video_generation_history():
     Returns:
         list: 영상 생성 기록 리스트
     """
-    return video_db.all()
+    with _db_lock:
+        return video_db.all()
 
 
 def get_video_generation_by_id(record_id):
@@ -65,7 +67,8 @@ def get_video_generation_by_id(record_id):
     Returns:
         dict: 영상 생성 기록 또는 None
     """
-    return video_db.get(doc_id=record_id)
+    with _db_lock:
+        return video_db.get(doc_id=record_id)
 
 
 # === 태스크 관리 함수들 ===
@@ -90,7 +93,11 @@ def save_task_info(task_id: str, task_data: dict):
     }
 
     with _db_lock:
-        return task_db.insert(record)
+        record_id = task_db.insert(record)
+        print(
+            f"💾 [DB] 태스크 정보 저장됨 - ID: {record_id}, task_id: {task_id}, 상태: {task_data.get('status')}"
+        )
+        return record_id
 
 
 def update_task_info(task_id: str, update_data: dict):
@@ -187,7 +194,10 @@ def save_video_url(url: str, file_name: str, metadata: dict = None):
         "metadata": metadata or {},
     }
 
-    return video_url_db.insert(record)
+    with _db_lock:
+        record_id = video_url_db.insert(record)
+        print(f"💾 [DB] 비디오 URL 저장됨 - ID: {record_id}, 파일: {file_name}")
+        return record_id
 
 
 def check_url_exists(url: str):
@@ -201,7 +211,8 @@ def check_url_exists(url: str):
         dict: 기존 레코드 정보 또는 None
     """
     UrlQuery = Query()
-    return video_url_db.get(UrlQuery.url == url)
+    with _db_lock:
+        return video_url_db.get(UrlQuery.url == url)
 
 
 def get_all_video_urls():
@@ -211,7 +222,8 @@ def get_all_video_urls():
     Returns:
         list: 비디오 URL 정보 리스트
     """
-    return video_url_db.all()
+    with _db_lock:
+        return video_url_db.all()
 
 
 def delete_video_url(url: str):
@@ -225,8 +237,9 @@ def delete_video_url(url: str):
         bool: 삭제 성공 여부
     """
     UrlQuery = Query()
-    result = video_url_db.remove(UrlQuery.url == url)
-    return len(result) > 0
+    with _db_lock:
+        result = video_url_db.remove(UrlQuery.url == url)
+        return len(result) > 0
 
 
 # === 음악 URL 관리 함수들 ===
@@ -253,7 +266,9 @@ def save_music_url(url: str, file_name: str, metadata: dict = None):
 
     with _db_lock:
         record_id = music_url_db.insert(record)
-        print(f"🔍 [DB] 음악 URL 저장됨 - ID: {record_id}, URL: {url}, 파일: {file_name}")
+        print(
+            f"💾 [DB] 음악 URL 저장됨 - ID: {record_id}, URL: {url}, 파일: {file_name}"
+        )
         return record_id
 
 
@@ -271,7 +286,9 @@ def check_music_url_exists(url: str):
     with _db_lock:
         result = music_url_db.get(UrlQuery.url == url)
         if result:
-            print(f"🔍 [DB] 중복 음악 URL 발견 - URL: {url}, 파일: {result.get('file_name')}")
+            print(
+                f"🔍 [DB] 중복 음악 URL 발견 - URL: {url}, 파일: {result.get('file_name')}"
+            )
         return result
 
 
@@ -302,5 +319,5 @@ def delete_music_url(url: str):
     with _db_lock:
         result = music_url_db.remove(UrlQuery.url == url)
         if len(result) > 0:
-            print(f"🔍 [DB] 음악 URL 삭제됨 - URL: {url}")
+            print(f"🗑️ [DB] 음악 URL 삭제됨 - URL: {url}")
         return len(result) > 0
